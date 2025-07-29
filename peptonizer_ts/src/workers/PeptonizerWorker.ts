@@ -46,7 +46,7 @@ declare const self: DedicatedWorkerGlobalScope & typeof globalThis;
 async function loadPyodideAndPackages(): Promise<void> {
     await init();
     self.pyodide = await loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.3/full/'
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'
     });
     // Load all packages into the Pyodide runtime environment that are required by the Peptonizer
     await self.pyodide.loadPackage([

@@ -101,7 +101,9 @@ def normalize_taxa(
 
     # Map all taxa onto the rank specified by the user
     for (peptide, taxa) in peptide_taxa.items():
-        peptide_taxa[peptide] = list(set(get_lineage_at_specified_rank(taxa, taxa_rank, lineages)))
+        taxa = [taxon for taxon in taxa if lineages[taxon] is not None]
+        if len(taxa) > 0:
+            peptide_taxa[peptide] = list(set(get_lineage_at_specified_rank(taxa, taxa_rank, lineages)))
     return peptide_taxa
 
 

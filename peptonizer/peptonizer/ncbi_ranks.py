@@ -1,6 +1,6 @@
 NCBI_RANKS = [
-    "superkingdom",
-    "kingdom",
+    "domain",
+    "realm",
     "subkingdom",
     "superphylum",
     "phylum",

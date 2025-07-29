@@ -13,7 +13,7 @@ setup(
     author="Tanja Holstein",
     author_email="tanja.holstein@ugent.be",
     description="The Peptonizer allows you to easily find out which taxa are most likely present in a metaproteomics sample of interest.",
-    url="https://github.com/yourusername/mypackage",  # Replace with your GitHub URL
+    url="https://github.com/compomics/Peptonizer2000",  # Replace with your GitHub URL
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
