@@ -25,7 +25,7 @@ import {
     ResultType,
     WorkerTask
 } from "./PeptonizerWorkerTypes.ts";
-import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm } from "../../pkg/peptonizer_rust.js";
+import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm } from "../../pkg/peptonizer_rust.js";
 
 import fetchUnipeptTaxonPythonCode from "./lib/fetch_unipept_taxon_info.py?raw";
 import performTaxaWeighingPythonCode from "./lib/perform_taxa_weighing.py?raw";
@@ -46,8 +46,9 @@ declare const self: DedicatedWorkerGlobalScope & typeof globalThis;
 async function loadPyodideAndPackages(): Promise<void> {
     await init();
     self.pyodide = await loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.3/full/'
     });
+
     // Load all packages into the Pyodide runtime environment that are required by the Peptonizer
     await self.pyodide.loadPackage([
         'numpy',
@@ -64,13 +65,13 @@ async function loadPyodideAndPackages(): Promise<void> {
         from pathlib import Path
         
         import micropip
-        
+
         await micropip.install('rbo')
 
         # Decode base64 string to binary and write to a temporary file
-        wheel_data = "${peptonizerWhlBase64}"
+        wheel_data = "${peptonizerWhlBase64.replace(/\s+/g, '')}"
         wheel_binary = base64.b64decode(wheel_data)
-        
+
         # Define a temporary path for the .whl file
         wheel_path = Path("/tmp/peptonizer-0.1-py3-none-any.whl")
         wheel_path.write_bytes(wheel_binary)
@@ -84,13 +85,21 @@ async function loadPyodideAndPackages(): Promise<void> {
 }
 
 async function fetchUnipeptTaxonInformation(data: FetchUnipeptTaxonTaskData): Promise<FetchUnipeptTaxonTaskResult> {
+    console.time("Execution Time");
     // Set inputs for the Python code
     self.pyodide.globals.set('peptides_scores', data.peptidesScores);
     self.pyodide.globals.set('rank', data.rank);
     self.pyodide.globals.set('taxon_query', data.taxonQuery);
 
-    // Fetch the Python code and execute it with Pyodide
     const unipeptJson = await self.pyodide.runPythonAsync(fetchUnipeptTaxonPythonCode);
+    
+
+    /*let score_keys = [...data.peptidesScores.keys()];
+    let peptidesScores = JSON.stringify(score_keys);
+
+    // Fetch the Python code and execute it with Pyodide
+    const unipeptJson = fetch_unipept_taxa_wasm(peptidesScores, data.rank, data.taxonQuery);*/
+    console.timeEnd("Execution Time");
 
     return { unipeptJson };
 }

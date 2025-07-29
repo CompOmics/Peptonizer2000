@@ -89,7 +89,7 @@ class WorkerPool {
             taxonQuery
         };
 
-        return await this.queue.push({ queueInput: { task: WorkerTask.FETCH_UNIPEPT_TAXON, input: eventData }, progressListener: undefined });
+        return await this.queue.pushAsync({ queueInput: { task: WorkerTask.FETCH_UNIPEPT_TAXON, input: eventData }, progressListener: undefined });
     }
 
     /**
