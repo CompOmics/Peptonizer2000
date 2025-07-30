@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize };
 
 pub trait HttpClient {
-    fn perform_post_request(&self, url: String, batch: Vec<i32>) -> Result<String, String>;
+    fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, String>;
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -13,14 +13,10 @@ pub struct PyHttpClient;
 #[cfg(target_arch = "wasm32")]
 impl HttpClient for WasmHttpClient {
 
-    fn perform_post_request(&self, url: String, batch: Vec<i32>) -> Result<String, String> {
+    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
         use web_sys::{XmlHttpRequest};
 
-        let payload = HTTPPostPayload {
-            input: batch,
-            extra: true
-        };
-        let payload_json = serde_json::to_string(&payload).unwrap();
+        let payload_json = serde_json::to_string(payload).unwrap();
 
         // Create a new XMLHttpRequest object
         let xhr = XmlHttpRequest::new().map_err(|e| format!("Failed to create XMLHttpRequest: {:?}", e))?;
@@ -53,14 +49,9 @@ impl HttpClient for WasmHttpClient {
 #[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for PyHttpClient {
 
-    fn perform_post_request(&self, url: String, batch: Vec<i32>) -> Result<String, String> {
+    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
         use reqwest::Client;
         use tokio::runtime::Runtime;
-
-        let payload = HTTPPostPayload {
-            input: batch,
-            extra: true
-        };
 
         // Create a Tokio runtime for async execution
         let rt = Runtime::new().unwrap();
@@ -69,7 +60,7 @@ impl HttpClient for PyHttpClient {
         let result = rt.block_on(async {
             let client = Client::new();
             let response = client.post(&url)
-                .json(&payload)
+                .json(payload)
                 .send()
                 .await?;
 
@@ -93,10 +84,4 @@ pub fn create_http_client() -> impl HttpClient {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn create_http_client() -> impl HttpClient {
     PyHttpClient
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct HTTPPostPayload {
-    input: Vec<i32>,
-    extra: bool
 }

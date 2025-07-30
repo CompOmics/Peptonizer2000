@@ -87,18 +87,18 @@ async function loadPyodideAndPackages(): Promise<void> {
 async function fetchUnipeptTaxonInformation(data: FetchUnipeptTaxonTaskData): Promise<FetchUnipeptTaxonTaskResult> {
     console.time("Execution Time");
     // Set inputs for the Python code
-    self.pyodide.globals.set('peptides_scores', data.peptidesScores);
+    /*self.pyodide.globals.set('peptides_scores', data.peptidesScores);
     self.pyodide.globals.set('rank', data.rank);
     self.pyodide.globals.set('taxon_query', data.taxonQuery);
 
-    const unipeptJson = await self.pyodide.runPythonAsync(fetchUnipeptTaxonPythonCode);
+    const unipeptJson = await self.pyodide.runPythonAsync(fetchUnipeptTaxonPythonCode);*/
     
-
-    /*let score_keys = [...data.peptidesScores.keys()];
+    let score_keys = [...data.peptidesScores.keys()];
     let peptidesScores = JSON.stringify(score_keys);
+    let taxonQuery = JSON.stringify(data.taxonQuery);
 
-    // Fetch the Python code and execute it with Pyodide
-    const unipeptJson = fetch_unipept_taxa_wasm(peptidesScores, data.rank, data.taxonQuery);*/
+    const unipeptJson = fetch_unipept_taxa_wasm(peptidesScores, data.rank, taxonQuery);
+    
     console.timeEnd("Execution Time");
 
     return { unipeptJson };

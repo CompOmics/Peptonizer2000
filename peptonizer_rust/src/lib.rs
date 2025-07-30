@@ -2,7 +2,6 @@
 extern crate serde_json;
 extern crate serde;
 
-mod taxon_manager;
 mod utils;
 mod http_client;
 mod random;
@@ -13,6 +12,8 @@ mod factor_graph;
 mod messages;
 mod convolution_tree;
 mod array_utils;
+mod fetch_unipept_taxa;
+mod unipept_communicator;
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::*;
@@ -23,6 +24,7 @@ pub use pyo3::*;
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use wasm_bindgen::prelude::*;
+    use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
     use crate::weight_taxa::perform_taxa_weighing;
     use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
 
@@ -31,6 +33,15 @@ mod wasm {
     extern crate wasm_bindgen_futures;
     extern crate js_sys;
     extern crate console_error_panic_hook;
+
+    #[wasm_bindgen]
+    pub fn fetch_unipept_taxa_wasm(
+        peptides: String,
+        rank: String,
+        taxon_query: String
+    ) -> String {
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
+    }
 
     #[wasm_bindgen]
     pub fn perform_taxa_weighing_wasm(

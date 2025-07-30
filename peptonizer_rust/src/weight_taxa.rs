@@ -2,7 +2,7 @@ use crate::utils::*;
 use std::collections::{HashMap, HashSet};
 use crate::random::select_random_samples_with_weights;
 use csv::Writer;
-use crate::taxon_manager::TaxonManager;
+use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
 
 /// Weight inferred taxa based on their (1) degeneracy and (2) their proteome size.
 /// Parameters
@@ -166,7 +166,7 @@ fn normalize_unipept_responses(taxa: &mut Vec<Vec<i32>>, taxa_rank: &str) {
 
     // Map all taxa onto the rank specified by the user
     for i in 0..taxa.len() {
-        taxa[i] = TaxonManager::get_unique_lineage_at_specified_rank(&taxa[i], taxa_rank, &mut lineage_cache);
+        taxa[i] = get_unique_lineage_at_specified_rank(&taxa[i], taxa_rank, &mut lineage_cache);
     }
 }
 
