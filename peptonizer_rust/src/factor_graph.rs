@@ -3,6 +3,36 @@ use minidom::Element;
 use std::collections::{HashMap, HashSet};
 use crate::utils::log;
 use serde::Serialize;
+use std::fmt::Write;
+use csv::ReaderBuilder;
+
+pub fn generate_graph(taxa_weights_csv: String) -> String {
+
+    // parse csv
+    let mut rdr = ReaderBuilder::new()
+        .has_headers(true)
+        .from_reader(taxa_weights_csv.as_bytes());
+    
+    let mut taxa_weights = Vec::new();
+    for record in rdr.deserialize() {
+        let row: TaxonWeight = record?;
+        taxa_weights.push(row);
+    }
+
+    let graph = CTFactorGraph::from_taxa_weights(taxa_weights);
+
+    graph.to_graphml()
+}
+
+pub struct TaxonWeight {
+    id: i32,
+    sequence: String,
+    score: f32,
+    psms: i32,
+    higher_taxa: i32,
+    weight: f32,
+    log_weight: f32
+}
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Edge {
@@ -80,6 +110,52 @@ impl CTFactorGraph {
     
         Ok((source, target))
     }
+
+
+    pub fn to_graphml(&self) -> String {
+
+        let mut graphml = String::new();
+
+        writeln!(
+            &mut graphml,
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#
+        ).unwrap();
+        writeln!(
+            &mut graphml,
+            r#"<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">"#
+        ).unwrap();
+
+        writeln!(
+            &mut graphml,
+            r#"  <key id="d3" for="node" attr.name="ParentNumber" attr.type="long" />
+  <key id="d2" for="node" attr.name="category" attr.type="string" />
+  <key id="d1" for="node" attr.name="InitialBelief_1" attr.type="double" />
+  <key id="d0" for="node" attr.name="InitialBelief_0" attr.type="double" />"#
+        ).unwrap();
+
+        writeln!(&mut graphml, r#"  <graph edgedefault="undirected">"#).unwrap();
+
+        for node in &self.nodes {
+            write!(&mut graphml, "{}", node.to_graphml());
+        }
+
+        for edge in &self.edges {
+            let node1: &Node = self.get_node(edge.get_node1_id());
+            let node2: &Node = self.get_node(edge.get_node2_id());
+
+            writeln!(
+                &mut graphml,
+                r#"<edge source="{}" target="{}" />"#,
+                node1.get_name(),
+                node2.get_name()
+            ).unwrap();
+        }
+
+        writeln!(&mut graphml, r#"  </graph>"#).unwrap();
+        writeln!(&mut graphml, r#"</graphml>"#).unwrap();
+
+        graphml
+    }
     
     // Method to parse a GraphML string into the graph
     pub fn from_graphml(graphml_str: &str) -> Result<CTFactorGraph, String> {
@@ -118,6 +194,28 @@ impl CTFactorGraph {
         }
     
         Ok( CTFactorGraph { nodes, edges })
+    }
+
+    pub fn from_taxa_weights(taxa_weights: Vec<TaxonWeight>) -> CTFactorGraph {
+
+        // Count frequencies of each higher_taxa
+        let mut higher_taxa_counts: HashMap<i32, usize> = HashMap::new();
+        for tw in &taxon_weights {
+            *higher_taxa_counts.entry(tw.higher_taxa).or_insert(0) += 1;
+        }
+        // Filter to keep only those with count > 1
+        let taxa_weights = taxa_weights.into_iter().filter(|tw| counts[tw.higher_taxa] > 1);
+
+        let node_id_counter: i32 = 0;
+        let node_name_to_id: HashMap<String, i32> = HashMap::new();
+        let nodes: Vec<Node> = Vec::new();
+        let edges: Vec<Edge> = Vec::new();
+        for tw in taxa_weights {
+            // Add sequence node
+            let seq_id = if 
+        }
+
+        CTFactorGraph { nodes: Vec::new(), edges: Vec::new() }
     }
 
     pub fn fill_in_priors(&mut self, prior: f64) {

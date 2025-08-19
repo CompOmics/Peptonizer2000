@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use minidom::Element;
 use serde::Serialize;
+use std::fmt::Write;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Factor {
@@ -201,5 +202,28 @@ impl Node {
         };
 
         Ok(Self { id, name, incident_edges: Vec::new(), subtype })
+    }
+
+    pub fn to_graphml(&self) -> String {
+
+        let mut graphml = String::new();
+
+        writeln!(&mut graphml, r#"<node id="{}">"#, self.id).unwrap();
+        writeln!(&mut graphml, r#"<data key="d2">{}</data>"#, self.category()).unwrap();
+
+        match &self.subtype {
+            NodeType::PeptideNode { initial_belief_0, initial_belief_1 } => {
+                writeln!(&mut graphml, r#"<data key="d0">{}</data>"#, initial_belief_0).unwrap();
+                writeln!(&mut graphml, r#"<data key="d1">{}</data>"#, initial_belief_1).unwrap();
+            },
+            NodeType::FactorNode { parent_number, initial_belief } => {
+                writeln!(&mut graphml, r#"<data key="d3">{}</data>"#, parent_number).unwrap();
+            },
+            _ => {}
+        }
+
+        writeln!(&mut graphml, r#"</node>"#).unwrap();
+
+        graphml
     }
 }

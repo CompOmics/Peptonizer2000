@@ -27,6 +27,7 @@ mod wasm {
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
     use crate::weight_taxa::perform_taxa_weighing;
     use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
+    use crate::factor_graph::generate_graph;
 
     extern crate wasm_bindgen;
     extern crate web_sys;
@@ -54,6 +55,11 @@ mod wasm {
         console_error_panic_hook::set_once(); // Enable panic logging
         let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank);
         Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)])
+    }
+
+    #[wasm_bindgen]
+    pub fn generate_pepgm_graph_wasm(taxa_weights_csv: String) -> String {
+        generate_graph(taxa_weights_csv)
     }
 
     #[wasm_bindgen]

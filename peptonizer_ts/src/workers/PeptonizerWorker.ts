@@ -25,7 +25,7 @@ import {
     ResultType,
     WorkerTask
 } from "./PeptonizerWorkerTypes.ts";
-import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm } from "../../pkg/peptonizer_rust.js";
+import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm, generate_pepgm_graph_wasm } from "../../pkg/peptonizer_rust.js";
 
 import fetchUnipeptTaxonPythonCode from "./lib/fetch_unipept_taxon_info.py?raw";
 import performTaxaWeighingPythonCode from "./lib/perform_taxa_weighing.py?raw";
@@ -85,7 +85,7 @@ async function loadPyodideAndPackages(): Promise<void> {
 }
 
 async function fetchUnipeptTaxonInformation(data: FetchUnipeptTaxonTaskData): Promise<FetchUnipeptTaxonTaskResult> {
-    console.time("Execution Time");
+    console.time("Execution time fetching Unipept information");
     // Set inputs for the Python code
     /*self.pyodide.globals.set('peptides_scores', data.peptidesScores);
     self.pyodide.globals.set('rank', data.rank);
@@ -99,13 +99,13 @@ async function fetchUnipeptTaxonInformation(data: FetchUnipeptTaxonTaskData): Pr
 
     const unipeptJson = fetch_unipept_taxa_wasm(peptidesScores, data.rank, taxonQuery);
     
-    console.timeEnd("Execution Time");
+    console.timeEnd("Execution time fetching Unipept information");
 
     return { unipeptJson };
 }
 
 async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<PerformTaxaWeighingTaskResult> {
-    console.time("Execution Time");
+    console.time("Execution time taxa weiging");
     
     let peptidesTaxa = JSON.stringify(Object.fromEntries(data.peptidesTaxa));
     let peptidesScores = JSON.stringify(Object.fromEntries(data.peptidesScores));
@@ -122,10 +122,9 @@ async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<P
 
     // Fetch the Python code and execute it with Pyodide
     const [sequenceScoresCsv_py, taxaWeightsCsv_py] = await self.pyodide.runPythonAsync(performTaxaWeighingPythonCode);
+    */
 
-    console.log(taxaWeightsCsv);
-    console.log(taxaWeightsCsv_py);*/
-    console.timeEnd("Execution Time");
+    console.timeEnd("Execution time taxa weiging");
     return {
         sequenceScoresCsv,
         taxaWeightsCsv
@@ -135,10 +134,15 @@ async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<P
 }
 
 async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraphTaskDataResult> {
-    self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
+    console.time("Execution time generating graph");
 
-    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);
+    const graphXml = generate_pepgm_graph_wasm(data.taxaWeightsCsv);
 
+    /*self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
+    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);*/
+    
+    console.timeEnd("Execution time generating graph");
+    console.log(graphXml);
     return {
         graphXml
     };
@@ -146,14 +150,10 @@ async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraph
 
 
 async function executePepgm(data: ExecutePepgmTaskData, workerId: number): Promise<ExecutePepgmTaskDataResult> {
+    console.time("Execution time PepGM");
 
     const taxonScoresJson = execute_pepgm_wasm(data.graphXml, data.alpha, data.beta, true, data.prior);
 
-    return {
-        taxonScoresJson
-    };
-
-    
     /*self.pyodide.globals.set('graph', data.graphXml);
     self.pyodide.globals.set('alpha', data.alpha);
     self.pyodide.globals.set('beta', data.beta);
@@ -161,30 +161,37 @@ async function executePepgm(data: ExecutePepgmTaskData, workerId: number): Promi
     self.pyodide.globals.set('worker_id', workerId);
 
     const taxonScoresJson = await self.pyodide.runPythonAsync(executePepgmPythonCode);
+    */
 
+    console.timeEnd("Execution time PepGM");
     return {
         taxonScoresJson
-    };*/
+    };
 }
 
 async function clusterTaxa(data: ClusterTaxaTaskData): Promise<ClusterTaxaTaskDataResult> {
+    console.time("Execution time clustering taxa");
+
     self.pyodide.globals.set('graph', data.graphXml);
     self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
     self.pyodide.globals.set('similarity_threshold', data.similarityThreshold);
 
     const clusteredTaxaWeightsCsv = await self.pyodide.runPythonAsync(clusterTaxaPythonCode);
 
+    console.timeEnd("Execution time clustering taxa");
     return {
         clusteredTaxaWeightsCsv
     };
 }
 
 async function computeGoodness(data: ComputeGoodnessTaskData): Promise<ComputeGoodnessDataResult> {
+    console.time("Execution time computing goodness");
     self.pyodide.globals.set('clustered_taxa_weights_csv', data.clusteredTaxaWeightsCsv);
     self.pyodide.globals.set('peptonizer_results', data.peptonizerResults);
 
     const goodness = await self.pyodide.runPythonAsync(computeGoodnessPythonCode);
 
+    console.timeEnd("Execution time computing goodness");
     return {
         goodness
     }
