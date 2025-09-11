@@ -17,12 +17,12 @@ class TaxonGraph(nx.Graph):
         self.taxon_id_list = []
 
     def create_from_taxa_weights(self, taxa_weights):
-        # drop rows that have an entry in HigherTaxa that appears only once
-        counts = taxa_weights["HigherTaxa"].value_counts()
+        # drop rows that have an entry in higher_taxa that appears only once
+        counts = taxa_weights["higher_taxa"].value_counts()
         taxa_weights = taxa_weights[
-            taxa_weights["HigherTaxa"].isin(counts[counts > 1].index)
+            taxa_weights["higher_taxa"].isin(counts[counts > 1].index)
         ]
-        new_graph = nx.from_pandas_edgelist(taxa_weights, "sequence", "HigherTaxa")
+        new_graph = nx.from_pandas_edgelist(taxa_weights, "sequence", "higher_taxa")
         peptide_attributes = taxa_weights.apply(
             lambda row: (
                 row["sequence"],
@@ -35,7 +35,7 @@ class TaxonGraph(nx.Graph):
             axis=1,
         )
         taxa_attributes = taxa_weights.apply(
-            lambda row: (row["HigherTaxa"], {"category": "taxon"}), axis=1
+            lambda row: (row["higher_taxa"], {"category": "taxon"}), axis=1
         )
         intermediate_graph = nx.Graph()
         intermediate_graph.add_edges_from(new_graph.edges)

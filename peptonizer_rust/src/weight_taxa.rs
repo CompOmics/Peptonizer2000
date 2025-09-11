@@ -115,7 +115,7 @@ fn generate_sequence_csv(taxa_to_include: Option<HashSet<i32>>, filter_taxa: boo
 
     let mut wtr = Writer::from_writer(vec![]);
 
-    let _ = wtr.write_record(&["", "sequence", "score", "psms", "HigherTaxa", "weight", "log_weight"]);
+    let _ = wtr.write_record(&["id", "sequence", "score", "psms", "higher_taxa", "weight", "log_weight"]);
 
     let mut id = 0;
     for i in 0..sequences.len() {

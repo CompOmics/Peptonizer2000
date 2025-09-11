@@ -60,6 +60,10 @@ impl Node {
         &self.subtype
     }
 
+    pub fn set_subtype(&mut self, subtype: NodeType) {
+        self.subtype = subtype;
+    }
+
     pub fn neighbors_count(&self) -> usize {
         self.incident_edges.len()
     }
@@ -208,7 +212,7 @@ impl Node {
 
         let mut graphml = String::new();
 
-        writeln!(&mut graphml, r#"<node id="{}">"#, self.id).unwrap();
+        writeln!(&mut graphml, r#"<node id="{}">"#, self.name).unwrap();
         writeln!(&mut graphml, r#"<data key="d2">{}</data>"#, self.category()).unwrap();
 
         match &self.subtype {

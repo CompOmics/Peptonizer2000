@@ -1,12 +1,12 @@
-use crate::node::{Factor, Node};
+use crate::node::{Factor, Node, NodeType};
 use minidom::Element;
 use std::collections::{HashMap, HashSet};
 use crate::utils::log;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::fmt::Write;
 use csv::ReaderBuilder;
 
-pub fn generate_graph(taxa_weights_csv: String) -> String {
+pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::error::Error>> {
 
     // parse csv
     let mut rdr = ReaderBuilder::new()
@@ -21,9 +21,10 @@ pub fn generate_graph(taxa_weights_csv: String) -> String {
 
     let graph = CTFactorGraph::from_taxa_weights(taxa_weights);
 
-    graph.to_graphml()
+    Ok(graph.to_graphml())
 }
 
+#[derive(Deserialize)]
 pub struct TaxonWeight {
     id: i32,
     sequence: String,
@@ -200,22 +201,78 @@ impl CTFactorGraph {
 
         // Count frequencies of each higher_taxa
         let mut higher_taxa_counts: HashMap<i32, usize> = HashMap::new();
-        for tw in &taxon_weights {
+        for tw in &taxa_weights {
             *higher_taxa_counts.entry(tw.higher_taxa).or_insert(0) += 1;
         }
         // Filter to keep only those with count > 1
-        let taxa_weights = taxa_weights.into_iter().filter(|tw| counts[tw.higher_taxa] > 1);
+        let taxa_weights = taxa_weights.into_iter().filter(|tw| higher_taxa_counts[&tw.higher_taxa] > 1);
 
-        let node_id_counter: i32 = 0;
-        let node_name_to_id: HashMap<String, i32> = HashMap::new();
-        let nodes: Vec<Node> = Vec::new();
-        let edges: Vec<Edge> = Vec::new();
+        let mut node_id_counter: i32 = 0;
+        let mut edge_id_counter: i32 = 0;
+        let mut node_name_to_id: HashMap<String, i32> = HashMap::new();
+        let mut nodes: Vec<Node> = Vec::new();
+        let mut edges: Vec<Edge> = Vec::new();
         for tw in taxa_weights {
-            // Add sequence node
-            let seq_id = if 
+            let cpd_name = tw.sequence.clone() + " CPD";
+
+            // Add sequence node and CPD node if necessary
+            if ! node_name_to_id.contains_key(&tw.sequence) {
+                let node1_id = node_id_counter;
+                let node_type = NodeType::PeptideNode { initial_belief_0: 1.0 - tw.score as f64, initial_belief_1: tw.score as f64 };
+                let node = Node::new(node1_id, tw.sequence.clone(), node_type);
+                nodes.push(node);
+                node_name_to_id.insert(tw.sequence.clone(), node1_id);
+                node_id_counter += 1;
+
+                let node2_id = node_id_counter;
+                let node_type = NodeType::FactorNode { 
+                    parent_number: 0, 
+                    initial_belief: Factor { array: Vec::new(), array_labels: Vec::new() }
+                };
+                let node = Node::new(node2_id, cpd_name.clone(), node_type);
+                nodes.push(node);
+                node_name_to_id.insert(cpd_name.clone(), node2_id);
+                node_id_counter += 1;
+
+                let edge = Edge { id: edge_id_counter, node1_id, node2_id, message_length: None };
+                edges.push(edge);
+                nodes[node1_id as usize].add_incident_edge(edge_id_counter);
+                nodes[node2_id as usize].add_incident_edge(edge_id_counter);
+                edge_id_counter += 1;
+            }
+
+            // Add taxon node if necessary
+            let higher_taxa_str = tw.higher_taxa.to_string();
+            if ! node_name_to_id.contains_key(&higher_taxa_str) {
+                let node_type = NodeType::TaxonNode { initial_belief_0: 0.0, initial_belief_1: 0.0 };
+                let node = Node::new(node_id_counter, higher_taxa_str.clone(), node_type);
+                nodes.push(node);
+
+                node_name_to_id.insert(higher_taxa_str.clone(), node_id_counter);
+                node_id_counter += 1;
+            }
+
+            // Add edge
+            let node1_id = node_name_to_id[&higher_taxa_str];
+            let node2_id = node_name_to_id[&cpd_name];
+            let edge = Edge { id: edge_id_counter, node1_id, node2_id, message_length: None };
+            edges.push(edge);
+            nodes[node1_id as usize].add_incident_edge(edge_id_counter);
+            nodes[node2_id as usize].add_incident_edge(edge_id_counter);
+            edge_id_counter += 1;
         }
 
-        CTFactorGraph { nodes: Vec::new(), edges: Vec::new() }
+        // set parent_number correct for factor nodes (CPDs)
+        for node in nodes.iter_mut() {
+            if node.is_factor_node() {
+                node.set_subtype(NodeType::FactorNode { 
+                    parent_number: node.neighbors_count() as i32 - 1, 
+                    initial_belief: Factor { array: Vec::new(), array_labels: Vec::new() }
+                });
+            }
+        }
+
+        CTFactorGraph { nodes, edges }
     }
 
     pub fn fill_in_priors(&mut self, prior: f64) {

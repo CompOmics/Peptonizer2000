@@ -139,10 +139,10 @@ async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraph
     const graphXml = generate_pepgm_graph_wasm(data.taxaWeightsCsv);
 
     /*self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
-    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);*/
+    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);
     
-    console.timeEnd("Execution time generating graph");
-    console.log(graphXml);
+    console.timeEnd("Execution time generating graph");*/
+
     return {
         graphXml
     };

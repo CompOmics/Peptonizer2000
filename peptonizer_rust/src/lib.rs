@@ -59,7 +59,7 @@ mod wasm {
 
     #[wasm_bindgen]
     pub fn generate_pepgm_graph_wasm(taxa_weights_csv: String) -> String {
-        generate_graph(taxa_weights_csv)
+        generate_graph(taxa_weights_csv).unwrap()
     }
 
     #[wasm_bindgen]
