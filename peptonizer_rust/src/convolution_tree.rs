@@ -1,6 +1,5 @@
 use rustfft::{FftPlanner, num_complex::Complex, num_traits::Zero};
-use crate::array_utils::{normalize, log_normalize};
-use crate::utils::*;
+use crate::array_utils::normalize;
 
 #[derive(Debug, Clone)]
 struct CTNode {
@@ -21,7 +20,7 @@ impl CTNode {
     /// Creates a count node by convolving two parent nodes.
     fn create_count_node(lhs: CTNode, rhs: CTNode) -> CTNode {
         let joint_above = fft_convolve(&lhs.joint_above, &rhs.joint_above);
-        let mut node = CTNode::new(joint_above);
+        let node = CTNode::new(joint_above);
         node
     }
 

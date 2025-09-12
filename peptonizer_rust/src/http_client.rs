@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize };
+use serde::Serialize;
 
 pub trait HttpClient {
     fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, String>;

@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::cmp::min;
 use crate::http_client::*;
 use serde::{Serialize, Deserialize};
-use crate::utils::*;
 use serde_json::{ Value };
 
 const UNIPEPT_URL: &str = "https://api.unipept.ugent.be";

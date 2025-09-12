@@ -14,6 +14,7 @@ mod convolution_tree;
 mod array_utils;
 mod fetch_unipept_taxa;
 mod unipept_communicator;
+mod taxa_clustering;
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::*;
@@ -28,6 +29,7 @@ mod wasm {
     use crate::weight_taxa::perform_taxa_weighing;
     use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
     use crate::factor_graph::generate_graph;
+    use crate::taxa_clustering::cluster_taxa;
 
     extern crate wasm_bindgen;
     extern crate web_sys;
@@ -79,6 +81,15 @@ mod wasm {
         let csv: String = run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol);
 
         parse_taxon_scores(csv)
+    }
+
+    #[wasm_bindgen]
+    pub fn cluster_taxa_wasm(
+        graph: String,
+        taxa_weights_csv: String,
+        similarity_threshold: f32
+    ) -> String {
+        cluster_taxa(graph, taxa_weights_csv, similarity_threshold).unwrap()
     }
 
 }

@@ -220,7 +220,7 @@ impl Node {
                 writeln!(&mut graphml, r#"<data key="d0">{}</data>"#, initial_belief_0).unwrap();
                 writeln!(&mut graphml, r#"<data key="d1">{}</data>"#, initial_belief_1).unwrap();
             },
-            NodeType::FactorNode { parent_number, initial_belief } => {
+            NodeType::FactorNode { parent_number, initial_belief: _ } => {
                 writeln!(&mut graphml, r#"<data key="d3">{}</data>"#, parent_number).unwrap();
             },
             _ => {}

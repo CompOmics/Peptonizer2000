@@ -1,4 +1,3 @@
-use crate::utils::*;
 use crate::unipept_communicator::{get_taxa_for_peptides, get_descendants_for_taxa};
 use std::collections::{HashMap, HashSet};
 

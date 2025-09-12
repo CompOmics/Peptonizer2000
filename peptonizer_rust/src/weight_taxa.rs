@@ -1,5 +1,5 @@
-use crate::utils::*;
 use std::collections::{HashMap, HashSet};
+use crate::utils::log;
 use crate::random::select_random_samples_with_weights;
 use csv::Writer;
 use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
@@ -16,9 +16,9 @@ pub fn perform_taxa_weighing(
     log("Parsing Unipept responses from disk...");
     let pep_taxa: HashMap<String, Vec<i32>> = serde_json::from_str(&pep_taxa).unwrap();
 
-    let sequences: Vec<String> = pep_taxa.iter().map(|(seq, taxa)| seq.to_owned()).collect();
+    let sequences: Vec<String> = pep_taxa.iter().map(|(seq, _taxa)| seq.to_owned()).collect();
 
-    let mut taxa: Vec<Vec<i32>> = pep_taxa.into_iter().map(|(seq, taxa)| taxa).collect();
+    let mut taxa: Vec<Vec<i32>> = pep_taxa.into_iter().map(|(_seq, taxa)| taxa).collect();
     
     log("Started mapping all taxon ids to the specified rank...");
     normalize_unipept_responses(&mut taxa, &taxa_rank);
@@ -143,7 +143,7 @@ fn generate_sequence_csv(taxa_to_include: Option<HashSet<i32>>, filter_taxa: boo
 fn generate_taxa_weights_csv(higher_taxa: Vec<i32>, higher_taxid_weights: Vec<f32>, higher_taxid_unique: Vec<bool>) -> String {
     let mut wtr = Writer::from_writer(vec![]);
 
-    let _ = wtr.write_record(&["", "HigherTaxa", "scaled_weight", "Unique"]);
+    let _ = wtr.write_record(&["id", "higher_taxa", "scaled_weight", "unique"]);
 
     for i in 0..higher_taxa.len() {
         let _ = wtr.write_record(&[

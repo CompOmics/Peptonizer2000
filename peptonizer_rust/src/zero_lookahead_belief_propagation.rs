@@ -1,12 +1,10 @@
 use crate::factor_graph::CTFactorGraph;
 use std::collections::HashMap;
-use crate::utils::log;
 use crate::messages::Messages;
 use csv::Writer;
 use serde_json;
 use std::io::Cursor;
 use csv::ReaderBuilder;
-use crate::utils::*;
 
 /// Performs bayesian inference through loopy belief propagation, returns dictionary {variable:posterior_probability}
 ///

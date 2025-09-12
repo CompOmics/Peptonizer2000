@@ -1,14 +1,23 @@
 use crate::node::{Factor, Node, NodeType};
 use minidom::Element;
 use std::collections::{HashMap, HashSet};
-use crate::utils::log;
 use serde::{Serialize, Deserialize};
 use std::fmt::Write;
 use csv::ReaderBuilder;
 
-pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::error::Error>> {
+#[derive(Deserialize)]
+pub struct TaxonWeight {
+    pub id: i32,
+    pub sequence: String,
+    pub score: f32,
+    pub psms: i32,
+    pub higher_taxa: i32,
+    pub weight: f32,
+    pub log_weight: f32
+}
 
-    // parse csv
+
+pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeight>, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_reader(taxa_weights_csv.as_bytes());
@@ -19,20 +28,17 @@ pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::e
         taxa_weights.push(row);
     }
 
+    Ok(taxa_weights)
+}
+
+
+pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::error::Error>> {
+
+    let taxa_weights = parse_taxon_weights_csv(taxa_weights_csv)?;
+
     let graph = CTFactorGraph::from_taxa_weights(taxa_weights);
 
     Ok(graph.to_graphml())
-}
-
-#[derive(Deserialize)]
-pub struct TaxonWeight {
-    id: i32,
-    sequence: String,
-    score: f32,
-    psms: i32,
-    higher_taxa: i32,
-    weight: f32,
-    log_weight: f32
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -137,7 +143,7 @@ impl CTFactorGraph {
         writeln!(&mut graphml, r#"  <graph edgedefault="undirected">"#).unwrap();
 
         for node in &self.nodes {
-            write!(&mut graphml, "{}", node.to_graphml());
+            write!(&mut graphml, "{}", node.to_graphml()).unwrap();
         }
 
         for edge in &self.edges {

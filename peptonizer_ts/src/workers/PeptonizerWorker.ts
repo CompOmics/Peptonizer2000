@@ -25,7 +25,7 @@ import {
     ResultType,
     WorkerTask
 } from "./PeptonizerWorkerTypes.ts";
-import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm, generate_pepgm_graph_wasm } from "../../pkg/peptonizer_rust.js";
+import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm, generate_pepgm_graph_wasm, cluster_taxa_wasm } from "../../pkg/peptonizer_rust.js";
 
 import fetchUnipeptTaxonPythonCode from "./lib/fetch_unipept_taxon_info.py?raw";
 import performTaxaWeighingPythonCode from "./lib/perform_taxa_weighing.py?raw";
@@ -139,9 +139,9 @@ async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraph
     const graphXml = generate_pepgm_graph_wasm(data.taxaWeightsCsv);
 
     /*self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
-    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);
+    const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);*/
     
-    console.timeEnd("Execution time generating graph");*/
+    console.timeEnd("Execution time generating graph");
 
     return {
         graphXml
@@ -172,11 +172,13 @@ async function executePepgm(data: ExecutePepgmTaskData, workerId: number): Promi
 async function clusterTaxa(data: ClusterTaxaTaskData): Promise<ClusterTaxaTaskDataResult> {
     console.time("Execution time clustering taxa");
 
-    self.pyodide.globals.set('graph', data.graphXml);
+    const clusteredTaxaWeightsCsv = cluster_taxa_wasm(data.graphXml, data.taxaWeightsCsv, data.similarityThreshold)
+
+    /*self.pyodide.globals.set('graph', data.graphXml);
     self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
     self.pyodide.globals.set('similarity_threshold', data.similarityThreshold);
 
-    const clusteredTaxaWeightsCsv = await self.pyodide.runPythonAsync(clusterTaxaPythonCode);
+    const clusteredTaxaWeightsCsv = await self.pyodide.runPythonAsync(clusterTaxaPythonCode);*/
 
     console.timeEnd("Execution time clustering taxa");
     return {

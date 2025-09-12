@@ -1,9 +1,7 @@
 use crate::factor_graph::CTFactorGraph;
 use crate::node::{Node, NodeType};
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use crate::utils::log;
 use crate::array_utils::*;
 use crate::convolution_tree::ConvolutionTree;
 
@@ -306,7 +304,6 @@ impl Messages {
     }
 
     fn compute_out_message_factor(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32) -> Vec<f64> {
-        let start_node = self.graph.get_node(start_id);
         let end_node = self.graph.get_node(end_id);
         let mut incoming_messages_end: Vec<Vec<f64>> = self.msg_in[start_id as usize].clone();
         incoming_messages_end.remove(end_in_start_id as usize);
@@ -471,7 +468,6 @@ impl Messages {
     }
 
     fn compute_priority(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32) {
-        let start_node = self.graph.get_node(start_id);
         let end_node = self.graph.get_node(end_id);
 
         let priority = self.priorities.get_mut(&(end_id, start_in_end_id)).unwrap();
