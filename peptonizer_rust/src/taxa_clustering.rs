@@ -1,6 +1,6 @@
 use crate::factor_graph::CTFactorGraph;
 use std::collections::{HashMap, HashSet};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Deserializer};
 use csv::{ReaderBuilder, WriterBuilder};
 
 
@@ -11,7 +11,7 @@ pub struct Taxon {
     pub scaled_weight: f32,
     pub unique: bool,
 
-    #[serde(default, serialize_with = "vec_to_string")]
+    #[serde(default, serialize_with = "vec_to_string", deserialize_with = "string_to_vec")]
     pub cluster_members: Vec<i32>
 }
 
@@ -25,6 +25,17 @@ where
         vec.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
     );
     serializer.serialize_str(&joined)
+}
+
+pub fn string_to_vec<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    let vec = s.split(',')
+               .filter_map(|item| item.trim().parse::<i32>().ok())
+               .collect();
+    Ok(vec)
 }
 
 

@@ -28,7 +28,7 @@ def compute_goodness(taxa_scores: dict, taxid_weights: pd.DataFrame):
 
     # Compute the rank-based similarity between weight-sorted taxa and score-sorted ID results
     return rbo.RankingSimilarity(
-        taxid_weights['HigherTaxa'].values,
+        taxid_weights['higher_taxa'].values,
         [int(tax_id) for tax_id in sorted_ids]
     ).rbo() * (1 / computed_entropy ** 2)
 

@@ -1,4 +1,3 @@
-
 extern crate serde_json;
 extern crate serde;
 
@@ -15,6 +14,7 @@ mod array_utils;
 mod fetch_unipept_taxa;
 mod unipept_communicator;
 mod taxa_clustering;
+mod analyse_grid_search;
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::*;
@@ -30,6 +30,7 @@ mod wasm {
     use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
     use crate::factor_graph::generate_graph;
     use crate::taxa_clustering::cluster_taxa;
+    use crate::analyse_grid_search::compute_goodness;
 
     extern crate wasm_bindgen;
     extern crate web_sys;
@@ -90,6 +91,14 @@ mod wasm {
         similarity_threshold: f32
     ) -> String {
         cluster_taxa(graph, taxa_weights_csv, similarity_threshold).unwrap()
+    }
+
+    #[wasm_bindgen]
+    pub fn compute_goodness_wasm(
+        clustered_taxa_weights_csv: String, 
+        peptonizer_results: String
+    ) -> f64 {
+        compute_goodness(clustered_taxa_weights_csv, peptonizer_results).unwrap()
     }
 
 }

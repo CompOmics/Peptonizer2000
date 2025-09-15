@@ -25,7 +25,14 @@ import {
     ResultType,
     WorkerTask
 } from "./PeptonizerWorkerTypes.ts";
-import init, { perform_taxa_weighing_wasm, execute_pepgm_wasm, fetch_unipept_taxa_wasm, generate_pepgm_graph_wasm, cluster_taxa_wasm } from "../../pkg/peptonizer_rust.js";
+import init, { 
+    perform_taxa_weighing_wasm, 
+    execute_pepgm_wasm, 
+    fetch_unipept_taxa_wasm, 
+    generate_pepgm_graph_wasm, 
+    cluster_taxa_wasm,
+    compute_goodness_wasm
+} from "../../pkg/peptonizer_rust.js";
 
 import fetchUnipeptTaxonPythonCode from "./lib/fetch_unipept_taxon_info.py?raw";
 import performTaxaWeighingPythonCode from "./lib/perform_taxa_weighing.py?raw";
@@ -188,10 +195,16 @@ async function clusterTaxa(data: ClusterTaxaTaskData): Promise<ClusterTaxaTaskDa
 
 async function computeGoodness(data: ComputeGoodnessTaskData): Promise<ComputeGoodnessDataResult> {
     console.time("Execution time computing goodness");
-    self.pyodide.globals.set('clustered_taxa_weights_csv', data.clusteredTaxaWeightsCsv);
+    
+    let peptonizerResults = JSON.stringify(Object.fromEntries(data.peptonizerResults));
+    const goodness = compute_goodness_wasm(data.clusteredTaxaWeightsCsv, peptonizerResults);
+    
+    /*self.pyodide.globals.set('clustered_taxa_weights_csv', data.clusteredTaxaWeightsCsv);
     self.pyodide.globals.set('peptonizer_results', data.peptonizerResults);
 
     const goodness = await self.pyodide.runPythonAsync(computeGoodnessPythonCode);
+    */
+    console.log(goodness);
 
     console.timeEnd("Execution time computing goodness");
     return {
