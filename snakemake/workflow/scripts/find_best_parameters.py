@@ -5,7 +5,7 @@ import re
 import shutil
 from os import path
 
-from peptonizer.peptonizer import find_best_parameters, ParameterSet, clean_csv, parse_taxon_scores
+from peptonizer_rust import compute_goodness_py, clean_csv_py
 
 parser = argparse.ArgumentParser()
 
@@ -69,38 +69,39 @@ def extract_parameters(filename):
         raise ValueError("The filename does not contain valid 'a', 'b', and 'p' parameters.")
 
 # Get all the taxa weights that are required to compute the goodness metric for each results file
-weights_df = pd.read_csv(
-    args.taxa_weights_dataframe_file,
-    usecols = ['HigherTaxa', 'scaled_weight']
-)
+taxide_weights = ""
+with open(args.taxa_weights_dataframe_file, 'r') as taxid_weights_file:
+    taxid_weights = taxid_weights_file.read()
 
 # Store all result dataframes and the corresponding parameter sets in this list that will be used to finally find the
 # best parameter set.
-results_and_params = []
+best_param_set = (0, 0, 0)
+best_goodness = 0.0
 for result_file in find_csv_files(args.results_folder):
     alpha, beta, prior = extract_parameters(result_file)
     with open(result_file, "r") as f:
-        taxon_scores = parse_taxon_scores(f.read())
-        parameter_set = ParameterSet(alpha, beta, prior)
-        results_and_params.append((taxon_scores, parameter_set))
-
-best_param_set = find_best_parameters(results_and_params, weights_df)
+        peptonizer_result = f.read()
+        goodness = compute_goodness_py(taxid_weights, peptonizer_result)
+        if goodness > best_goodness:
+            best_goodness = goodness
+            best_param_set = (alpha, beta, prior)
 
 # Write out the best parameters to a CSV file for future reference
+(alpha, beta, prior) = best_param_set
 with open(args.best_params_file, "w") as f:
     f.write("alpha,beta,prior\n")
-    f.write(f"{best_param_set.alpha},{best_param_set.beta},{best_param_set.prior}\n")
+    f.write(f"{alpha},{beta},{prior}\n")
 
 # Clean the CSV for the best parameters and write it to the final output directory
-best_csv_path = path.join(args.results_folder, f"prior{best_param_set.prior}", f"pepgm_results_a{best_param_set.alpha}_b{best_param_set.beta}_p{best_param_set.prior}.csv")
+best_csv_path = path.join(args.results_folder, f"prior{prior}", f"pepgm_results_a{alpha}_b{beta}_p{prior}.csv")
 with open(best_csv_path, "r") as in_file:
-    clean_taxa_csv = clean_csv(in_file.read())
+    clean_taxa_csv = clean_csv_py(in_file.read())
 
     with open(args.best_params_csv, "w") as out_file:
         out_file.write(clean_taxa_csv)
 
 # Copy the plots with the best parameters to the final output directory
 shutil.copy(
-    path.join(args.results_folder, f"prior{best_param_set.prior}", f"pepgm_results_a{best_param_set.alpha}_b{best_param_set.beta}_p{best_param_set.prior}.png"),
+    path.join(args.results_folder, f"prior{prior}", f"pepgm_results_a{alpha}_b{beta}_p{prior}.png"),
     args.best_params_png
 )

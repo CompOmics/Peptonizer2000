@@ -75,6 +75,12 @@ pub struct HTTPTaxonomyDescendantsResponse {
     descendants: Vec<i32>
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct TaxonomyResponse {
+    taxon_id: i32,
+    taxon_name: String,
+}
+
 
 fn parse_response_json_string(http_response: &str) -> Vec<HashMap<String, Option<i32>>> {
     let http_response_map: Vec<HashMap<String, Option<i32>>> = serde_json::from_str::<Vec<HashMap<String, Value>>>(http_response)
@@ -237,4 +243,44 @@ pub fn get_descendants_for_taxa(target_taxa: Vec<i32>, descendant_rank: String) 
     }
 
     all_descendants
+}
+
+
+/// Returns a mapping from taxon ID to taxon name for all taxa provided.
+///
+/// # Arguments
+/// * `target_taxa` - A list of taxon IDs for which all corresponding taxon names should be retrieved.
+///
+/// # Errors
+/// Returns an error if the Unipept API server responds with a non-success status code
+/// or if something goes wrong with the network or JSON parsing.
+///
+/// # Returns
+/// A `HashMap<i32, String>` mapping taxon IDs to their corresponding taxon names.
+pub fn get_names_for_taxa(target_taxa: &Vec<i32>) -> Result<HashMap<i32, String>, String> {
+    let url = format!("{}{}", UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT);
+    let mut output: HashMap<i32, String> = HashMap::new();
+
+    let http_client = &create_http_client();
+
+    for i in (0..target_taxa.len()).step_by(TAXONOMY_ENDPOINT_BATCH_SIZE) {
+        let batch: Vec<i32> = target_taxa[i..std::cmp::min(i + TAXONOMY_ENDPOINT_BATCH_SIZE, target_taxa.len())]
+            .to_vec();
+
+        let payload = serde_json::json!({
+            "input": batch
+        });
+
+        // Perform the HTTP POST request
+        let http_response = http_client.perform_post_request(url.clone(), &payload)
+            .map_err(|e| format!("Communication error: {}", e)).unwrap();
+
+        let http_response = serde_json::from_str::<Vec<TaxonomyResponse>>(&http_response).unwrap();
+        
+        for response in http_response {
+            output.insert(response.taxon_id, response.taxon_name);
+        }
+    }
+
+    Ok(output)
 }

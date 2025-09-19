@@ -71,7 +71,7 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
     let graph = CTFactorGraph::from_graphml(&graph_xml)?;
     let taxa_weights = parse_taxon_csv(taxa_weights_csv)?;
 
-    let peptidome_dict = get_peptides_per_taxon(&graph);
+    let peptidome_dict = get_peptides_per_taxon(&graph)?;
     let (similarities, taxon_index) = compute_detected_peptidome_similarity(peptidome_dict);
 
     let taxa_weights: Vec<Taxon> = taxa_weights
@@ -115,18 +115,21 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
 }
 
 
-fn get_peptides_per_taxon(graph: &CTFactorGraph) -> HashMap<i32, HashSet<i32>> {
+fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<i32>>, Box<dyn std::error::Error>> {
     let mut peptidome_dict = HashMap::new();
 
     for node in graph.get_nodes() {
         if node.is_taxon_node() {
-            let node_id: i32 = String::from(node.get_name()).parse().expect("Taxon node name is no number");
-            let neighbors = graph.get_neighbors(node);
-            peptidome_dict.insert(node_id, neighbors[..neighbors.len()-4].iter().cloned().collect());
+            let node_id: i32 = String::from(node.get_name()).parse()?;
+            let neighbors: HashSet<i32> = graph.get_neighbors(node)
+                .iter()
+                .map(|&factor_id| graph.get_peptide_for_factor(factor_id))
+                .collect::<Result<_, _>>()?;
+            peptidome_dict.insert(node_id, neighbors);
         }
     }
 
-    peptidome_dict
+    Ok(peptidome_dict)
 }
 
 fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<i32, HashSet<i32>>) -> (Vec<Vec<f32>>, HashMap<i32, u32>) {

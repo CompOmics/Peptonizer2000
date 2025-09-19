@@ -41,7 +41,6 @@ def cluster_taxa_based_on_similarity(
         taxid_weights: pd.DataFrame,
         similarity_threshold: float
 ):
-    print(taxid_weights)
     peptidome_dict = get_peptides_per_taxon(pepgm_graph)
     similarities = compute_detected_peptidome_similarity(peptidome_dict)
 

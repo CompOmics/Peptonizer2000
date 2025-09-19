@@ -1,9 +1,7 @@
 import argparse
 import gzip
-import json
 
-from peptonizer_rust import perform_taxa_weighing_py
-from peptonizer.peptonizer import perform_taxa_weighing, parse_peptide_tsv, UnipeptCommunicator
+from peptonizer_rust import perform_taxa_weighing_py, parse_input_peptides_py
 
 parser = argparse.ArgumentParser()
 
@@ -50,7 +48,7 @@ with open(args.pout_file, 'rt', encoding='utf-8') as file:
     file_contents = file.read()
 
 # Parse the input MS2Rescore file
-pep_score, pep_psm_counts = parse_peptide_tsv(file_contents)
+pep_score, pep_psm_counts = parse_input_peptides_py(file_contents)
 
 
 # Read the Unipept response file
@@ -60,10 +58,9 @@ with open(args.unipept_response_file, "r") as file:
 
 sequence_scores, taxa_weights = perform_taxa_weighing_py(
     unipept_responses,
-    json.dumps(pep_score),
-    json.dumps(pep_psm_counts),
+    pep_score,
+    pep_psm_counts,
     args.number_of_taxa,
-    UnipeptCommunicator(),
     args.taxon_rank
 )
 

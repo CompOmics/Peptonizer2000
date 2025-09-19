@@ -1,6 +1,6 @@
 import argparse
 
-from peptonizer.peptonizer import run_belief_propagation
+from peptonizer_rust import execute_pepgm_py
 
 
 parser = argparse.ArgumentParser(
@@ -55,7 +55,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 with open(args.communities_graphml_path, 'r') as in_file:
-    csv_content = run_belief_propagation(
+    csv_content = execute_pepgm_py(
         in_file.read(),
         args.alpha,
         args.beta,

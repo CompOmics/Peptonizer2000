@@ -1,10 +1,10 @@
 use std::collections::{HashSet, HashMap};
 use crate::taxa_clustering::{Taxon, parse_taxon_csv};
-
+use crate::utils::log;
 
 pub fn compute_goodness(
-        clustered_taxa_weights_csv: String, 
-        peptonizer_results: String
+    clustered_taxa_weights_csv: String, 
+    peptonizer_results: String
 ) -> Result<f64, Box<dyn std::error::Error>> {
 
     let taxid_weights: Vec<Taxon> = parse_taxon_csv(clustered_taxa_weights_csv)?;
@@ -27,7 +27,7 @@ pub fn compute_goodness(
 }
 
 
-pub fn rbo(list1: &[i32], list2: &[i32]) -> f64 {
+fn rbo(list1: &[i32], list2: &[i32]) -> f64 {
     let k = list1.len().min(list2.len());
     let mut sum = 0.0;
 

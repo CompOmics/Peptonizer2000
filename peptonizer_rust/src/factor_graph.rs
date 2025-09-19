@@ -325,6 +325,17 @@ impl CTFactorGraph {
         ) as i32
     }
 
+    pub fn get_peptide_for_factor(&self, factor_id: i32) -> Result<i32, Box<dyn std::error::Error>> {
+        let neighbors = self.get_neighbors_from_id(factor_id);
+        for neighbor_id in neighbors {
+            let neighbor = self.get_node(neighbor_id);
+            if let NodeType::PeptideNode { .. } = neighbor.get_subtype() {
+                return Ok(neighbor.get_id());
+            }
+        }
+        return Err(format!("Peptide not found for factor with id {}", factor_id).into());
+    }
+
     pub fn add_ct_nodes(&mut self) {
         // When creating the CTGraph and not just reading from a previously saved graph format, use this function to add the CT nodes
         

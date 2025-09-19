@@ -21,16 +21,15 @@ rule All:
         path.join(data_dir, 'best_parameters.csv'),
         path.join(data_dir, 'peptonizer_result.csv'),
         path.join(data_dir, 'peptonizer_result.png')
+        
 
 rule GetTaxonomyFromUnipept:
     input:
         config['input_file']
     output:
         path.join(data_dir, 'peptide_taxa.json')
-    log:
-        path.join(log_dir, 'get_taxonomy_from_unipept.log')
     params:
-        taxon_query=config['taxon_query'],
+        taxon_query=str(config['taxon_query']),
         taxon_rank=config['taxon_rank'],
         run_command=select_command(config['profile'], path.join(benchmark_dir, "get_taxonomy_from_unipept.prof"))
     benchmark:
@@ -39,8 +38,7 @@ rule GetTaxonomyFromUnipept:
     shell:
         """
         export PYTHONPATH={project_root}:${{PYTHONPATH:-}}
-        pip install --force-reinstall wheels/peptonizer_rust-0.1.0-cp312-cp312-manylinux_2_34_aarch64.whl
-        {params.run_command} scripts/pout_to_taxonomy.py --input-file {input[0]} --unipept-response-file {output[0]} --log-file {log[0]} --taxonomy-query {params.taxon_query} --taxon-rank {params.taxon_rank}
+        {params.run_command} scripts/pout_to_taxonomy.py --input-file {input[0]} --unipept-response-file {output[0]} --taxonomy-query {params.taxon_query} --taxon-rank {params.taxon_rank}
         """
 
 rule WeightTaxa:
@@ -60,7 +58,6 @@ rule WeightTaxa:
     shell:
         """
         export PYTHONPATH={project_root}:${{PYTHONPATH:-}}
-        pip install --force-reinstall wheels/peptonizer_rust-0.1.0-cp312-cp312-manylinux_2_34_aarch64.whl
         {params.run_command} scripts/infer_taxa_weights.py --pout-file {input[0]} --unipept-response-file {input[1]}  --sequence-scores-dataframe-file {output[0]} --taxa-weights-dataframe-file {output[1]} --number-of-taxa {params.number_of_taxa} --taxon-rank {params.taxon_rank}
         """
 

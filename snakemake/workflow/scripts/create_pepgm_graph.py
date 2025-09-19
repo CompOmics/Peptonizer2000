@@ -1,7 +1,6 @@
 import argparse
-import pandas as pd
 
-from peptonizer.peptonizer import generate_pepgm_graph
+from peptonizer_rust import generate_pepgm_graph_py
 
 
 parser = argparse.ArgumentParser(
@@ -23,5 +22,10 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-ct_factor_graph = generate_pepgm_graph(pd.read_csv(args.sequence_scores_dataframe_file, dtype={"HigherTaxa": "Int64"}))
-ct_factor_graph.save_to_graph_ml(args.out)
+with open(args.sequence_scores_dataframe_file, "r") as f:
+    csv_str = f.read()
+
+ct_factor_graph = generate_pepgm_graph_py(csv_str)
+
+with open(args.out, 'w') as graphml_file:
+    graphml_file.write(ct_factor_graph)
