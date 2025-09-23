@@ -7,7 +7,7 @@ use crate::utils::log;
 /// ranking similarity (via rank-biased overlap) and diversity (via entropy).
 /// 
 /// # Arguments
-/// * `clustered_taxa_weights_csv` - Path to a CSV file containing clustered taxa weights.
+/// * `clustered_taxa_weights_csv` - CSV string containing clustered taxa weights.
 /// * `peptonizer_results` - JSON string containing taxa scores produced by Peptonizer.
 /// 
 /// # Returns
