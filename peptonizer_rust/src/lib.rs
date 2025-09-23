@@ -40,6 +40,18 @@ mod wasm {
     extern crate js_sys;
     extern crate console_error_panic_hook;
 
+    /// Fetches taxa for peptides and filters them by rank and taxon query.
+    ///
+    /// # Arguments
+    /// * `peptides` - JSON string of peptide sequences.
+    /// * `rank` - Taxonomic rank used for filtering (e.g. "species").
+    /// * `taxon_query` - JSON string of taxon IDs to filter against.
+    ///
+    /// # Returns
+    /// JSON string mapping peptides to filtered taxon IDs.
+    ///
+    /// # Panics
+    /// Panics if input JSON cannot be parsed or if result cannot be serialized.
     #[wasm_bindgen]
     pub fn fetch_unipept_taxa_wasm(
         peptides: String,

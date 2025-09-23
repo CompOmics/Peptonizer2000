@@ -1,6 +1,19 @@
 use serde::Serialize;
 
+/// A trait for performing HTTP POST requests with serialized payloads.
 pub trait HttpClient {
+
+    /// Performs an HTTP POST request with a JSON payload.
+    ///
+    /// # Arguments
+    /// * `url` - Target URL for the request.
+    /// * `batch` - Payload to serialize and send as JSON.
+    ///
+    /// # Returns
+    /// Response body as a string on success.
+    ///
+    /// # Errors
+    /// Returns an error string if the request fails or the response cannot be processed.
     fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, String>;
 }
 
@@ -13,6 +26,17 @@ pub struct PyHttpClient;
 #[cfg(target_arch = "wasm32")]
 impl HttpClient for WasmHttpClient {
 
+    /// Sends an HTTP POST request in a WebAssembly environment using `XmlHttpRequest`.
+    ///
+    /// # Arguments
+    /// * `url` - Target URL for the request.
+    /// * `payload` - Payload to serialize and send as JSON.
+    ///
+    /// # Returns
+    /// Response body as a string on success.
+    ///
+    /// # Errors
+    /// Returns an error string if request setup, transmission, or response parsing fails.
     fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
         use web_sys::{XmlHttpRequest};
 
@@ -49,6 +73,17 @@ impl HttpClient for WasmHttpClient {
 #[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for PyHttpClient {
 
+    /// Sends an HTTP POST request in a native environment using `reqwest` and Tokio.
+    ///
+    /// # Arguments
+    /// * `url` - Target URL for the request.
+    /// * `payload` - Payload to serialize and send as JSON.
+    ///
+    /// # Returns
+    /// Response body as a string on success.
+    ///
+    /// # Errors
+    /// Returns an error string if the request fails or the response cannot be processed.
     fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
         use reqwest::Client;
         use tokio::runtime::Runtime;
@@ -77,11 +112,13 @@ impl HttpClient for PyHttpClient {
 }
 
 #[cfg(target_arch = "wasm32")]
+/// Creates a new `HttpClient` for WebAssembly targets.
 pub fn create_http_client() -> impl HttpClient {
     WasmHttpClient
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// Creates a new `HttpClient` for native targets.
 pub fn create_http_client() -> impl HttpClient {
     PyHttpClient
 }

@@ -4,18 +4,37 @@ use serde::{Serialize, Deserialize, Deserializer};
 use csv::{ReaderBuilder, WriterBuilder};
 
 
+
+/// Represents a taxonomic unit with attributes used for clustering.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Taxon {
+    /// Unique identifier of the taxon.
     pub id: i32,
+     /// Identifier of the higher-level taxon it belongs to.
     pub higher_taxa: i32,
+    /// Weight of the taxon, scaled for comparison.
     pub scaled_weight: f32,
+    /// Whether the taxon is unique in the dataset.
     pub unique: bool,
 
+    /// IDs of taxa belonging to the same cluster.
+    /// Serialized as a string, deserialized back into a vector.
     #[serde(default, serialize_with = "vec_to_string", deserialize_with = "string_to_vec")]
     pub cluster_members: Vec<i32>
 }
 
 
+/// Converts a `Vec<i32>` to a serialized string representation.
+///
+/// # Arguments
+/// * `vec` - Reference to the vector to be serialized.
+/// * `serializer` - Serializer provided by Serde.
+///
+/// # Returns
+/// Serialized string wrapped in the serializer's `Ok` type.
+///
+/// # Errors
+/// Returns an error if serialization fails.
 fn vec_to_string<S>(vec: &Vec<i32>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -27,6 +46,17 @@ where
     serializer.serialize_str(&joined)
 }
 
+
+/// Converts a serialized string back into a `Vec<i32>`.
+///
+/// # Arguments
+/// * `deserializer` - Deserializer provided by Serde.
+///
+/// # Returns
+/// Vector of integers parsed from the string.
+///
+/// # Errors
+/// Returns an error if the string cannot be deserialized or parsed into integers.
 pub fn string_to_vec<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
 where
     D: Deserializer<'de>,
@@ -39,6 +69,16 @@ where
 }
 
 
+/// Parses a CSV string into a list of `Taxon`.
+///
+/// # Arguments
+/// * `taxa_weights_csv` - CSV content as string.
+///
+/// # Returns
+/// Vector of `Taxon`.
+///
+/// # Errors
+/// Returns an error if CSV parsing fails.
 pub fn parse_taxon_csv(taxa_weights_csv: String) -> Result<Vec<Taxon>, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
@@ -53,6 +93,17 @@ pub fn parse_taxon_csv(taxa_weights_csv: String) -> Result<Vec<Taxon>, Box<dyn s
     Ok(taxa_weights)
 }
 
+
+/// Serializes a list of `Taxon` into CSV format.
+///
+/// # Arguments
+/// * `taxa` - List of taxa to serialize.
+///
+/// # Returns
+/// CSV as a string.
+///
+/// # Errors
+/// Returns an error if serialization fails.
 pub fn generate_taxa_cluster_csv(taxa: Vec<Taxon>) -> Result<String, Box<dyn std::error::Error>> {
     let mut wtr = WriterBuilder::new().from_writer(vec![]);
 
@@ -66,6 +117,18 @@ pub fn generate_taxa_cluster_csv(taxa: Vec<Taxon>) -> Result<String, Box<dyn std
 }
 
 
+/// Clusters taxa based on peptidome similarity and returns a CSV.
+///
+/// # Arguments
+/// * `graph_xml` - GraphML as string.
+/// * `taxa_weights_csv` - Taxa weights as CSV string.
+/// * `similarity_threshold` - Threshold for clustering.
+///
+/// # Returns
+/// CSV string with taxa and their clusters.
+///
+/// # Errors
+/// Returns an error if parsing, graph building, or clustering fails.
 pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_threshold: f32) -> Result<String, Box<dyn std::error::Error>> {
 
     let graph = CTFactorGraph::from_graphml(&graph_xml)?;
@@ -115,6 +178,16 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
 }
 
 
+/// Builds a dictionary of peptides per taxon.
+///
+/// # Arguments
+/// * `graph` - Factor graph reference.
+///
+/// # Returns
+/// Map from taxon ID to peptide set.
+///
+/// # Errors
+/// Returns an error if node parsing fails.
 fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<i32>>, Box<dyn std::error::Error>> {
     let mut peptidome_dict = HashMap::new();
 
@@ -132,6 +205,14 @@ fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<
     Ok(peptidome_dict)
 }
 
+
+/// Computes similarity matrix and taxon index map.
+///
+/// # Arguments
+/// * `peptidome_dict` - Map of taxon to peptides.
+///
+/// # Returns
+/// Tuple of (similarity matrix, taxon index map).
 fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<i32, HashSet<i32>>) -> (Vec<Vec<f32>>, HashMap<i32, u32>) {
     let mut sim_matrix = Vec::new();
     let mut taxon_index: HashMap<i32, u32> = HashMap::new();

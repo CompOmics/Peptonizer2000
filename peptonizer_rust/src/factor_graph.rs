@@ -5,6 +5,7 @@ use serde::{Serialize, Deserialize};
 use std::fmt::Write;
 use csv::ReaderBuilder;
 
+/// Represents a single taxon weight record parsed from a CSV file.
 #[derive(Deserialize)]
 pub struct TaxonWeight {
     pub id: i32,
@@ -17,6 +18,17 @@ pub struct TaxonWeight {
 }
 
 
+/// Parses a CSV string into a vector of `TaxonWeight` structs.
+///
+/// # Arguments
+/// * `taxa_weights_csv` - A string containing CSV data for taxon weights. The CSV
+///   must include headers: `id, sequence, score, psms, higher_taxa, weight, log_weight`.
+///
+/// # Returns
+/// Returns a `Result` containing a vector of `TaxonWeight` structs if parsing succeeds.
+///
+/// # Errors
+/// Returns an error if the CSV cannot be read, or if any record fails deserialization.
 pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeight>, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
@@ -32,6 +44,16 @@ pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeig
 }
 
 
+/// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
+///
+/// # Arguments
+/// * `taxa_weights_csv` - A string containing CSV data for taxon weights.
+///
+/// # Returns
+/// Returns a `Result` containing a GraphML string representation of the factor graph.
+///
+/// # Errors
+/// Returns an error if CSV parsing fails or if any error occurs during graph construction.
 pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::error::Error>> {
 
     let taxa_weights = parse_taxon_weights_csv(taxa_weights_csv)?;
@@ -41,6 +63,8 @@ pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::e
     Ok(graph.to_graphml())
 }
 
+
+/// Represents an edge in a factor graph connecting two nodes.
 #[derive(Debug, Serialize, Clone)]
 pub struct Edge {
     id: i32,
@@ -49,24 +73,30 @@ pub struct Edge {
     message_length: Option<i32>
 }
 
+
 impl Edge {
 
+    /// Returns the ID of the edge.
     pub fn get_id(&self) -> i32 {
         self.id
     }
 
+    /// Returns the first node ID of the edge.
     pub fn get_node1_id(&self) -> i32 {
         self.node1_id
     }
 
+    /// Returns the second node ID of the edge.
     pub fn get_node2_id(&self) -> i32 {
         self.node2_id
     }
 
+    /// Returns a tuple of the two node IDs of the edge.
     pub fn get_node_ids(&self) -> (i32, i32) {
         (self.node1_id, self.node2_id)
     }
 
+    /// Returns the message length associated with the edge.
     pub fn get_message_length(&self) -> Option<i32> {
         self.message_length
     }
@@ -80,6 +110,11 @@ pub struct CTFactorGraph {
 
 impl CTFactorGraph {
 
+    /// Adds the names and categories of all nodes to the provided vectors.
+    ///
+    /// # Arguments
+    /// * `node_names` - Mutable reference to a vector to store node names.
+    /// * `node_categories` - Mutable reference to a vector to store node categories.
     pub fn add_node_names_categories(&self, node_names: &mut Vec<String>, node_categories: &mut Vec<String>) {
         for node in &self.nodes {
             node_names.push(node.get_name().to_string());
@@ -87,26 +122,44 @@ impl CTFactorGraph {
         }
     } 
 
+    /// Returns a reference to the node with the given ID.
+    ///
+    /// # Arguments
+    /// * `node_id` - ID of the node to retrieve.
+    ///
+    /// # Returns
+    /// A reference to the `Node` corresponding to `node_id`.
     pub fn get_node(&self, node_id: i32) -> &Node {
         &self.nodes[node_id as usize]
     }
 
+    /// Returns a reference to the edge with the given ID.
+    ///
+    /// # Arguments
+    /// * `edge_id` - ID of the edge to retrieve.
+    ///
+    /// # Returns
+    /// A reference to the `Edge` corresponding to `edge_id`.
     pub fn get_edge(&self, edge_id: i32) -> &Edge {
         &self.edges[edge_id as usize]
     }
 
+    /// Returns the total number of nodes in the graph.
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
+    /// Returns the total number of edges in the graph.
     pub fn edge_count(&self) -> usize {
         self.edges.len()
     }
 
+    /// Returns a reference to all nodes in the graph.
     pub fn get_nodes(&self) -> &Vec<Node> {
         &self.nodes
     }
 
+    /// Returns a reference to all edges in the graph.
     pub fn get_edges(&self) -> &Vec<Edge> {
         &self.edges
     }
@@ -118,7 +171,10 @@ impl CTFactorGraph {
         Ok((source, target))
     }
 
-
+    /// Converts the factor graph into a GraphML string representation.
+    ///
+    /// # Returns
+    /// A `String` containing the GraphML XML representation of the factor graph.
     pub fn to_graphml(&self) -> String {
 
         let mut graphml = String::new();
@@ -164,7 +220,16 @@ impl CTFactorGraph {
         graphml
     }
     
-    // Method to parse a GraphML string into the graph
+    /// Constructs a `CTFactorGraph` from a GraphML string.
+    ///
+    /// # Arguments
+    /// * `graphml_str` - A string containing a GraphML representation of a graph.
+    ///
+    /// # Returns
+    /// A `Result` containing the constructed `CTFactorGraph` if successful.
+    ///
+    /// # Errors
+    /// Returns an error if parsing the GraphML fails or if nodes/edges cannot be created correctly.
     pub fn from_graphml(graphml_str: &str) -> Result<CTFactorGraph, String> {
         let mut nodes: Vec<Node> = Vec::new();
         let mut edges: Vec<Edge> = Vec::new();
@@ -203,6 +268,13 @@ impl CTFactorGraph {
         Ok( CTFactorGraph { nodes, edges })
     }
 
+    /// Constructs a `CTFactorGraph` from a list of `TaxonWeight`s.
+    ///
+    /// # Arguments
+    /// * `taxa_weights` - Vector of `TaxonWeight` structs used to build nodes and edges.
+    ///
+    /// # Returns
+    /// Returns a `CTFactorGraph` representing the factor graph built from the input data.
     pub fn from_taxa_weights(taxa_weights: Vec<TaxonWeight>) -> CTFactorGraph {
 
         // Count frequencies of each higher_taxa
@@ -281,22 +353,46 @@ impl CTFactorGraph {
         CTFactorGraph { nodes, edges }
     }
 
+    /// Fills all nodes with a prior probability.
+    ///
+    /// # Arguments
+    /// * `prior` - The prior probability to assign to each node.
     pub fn fill_in_priors(&mut self, prior: f64) {
         for node in &mut self.nodes {
             node.fill_in_prior(prior);
         }
     }
 
+    /// Fills all factor nodes with factor probabilities using alpha/beta parameters.
+    ///
+    /// # Arguments
+    /// * `alpha` - Alpha parameter for factor probability.
+    /// * `beta` - Beta parameter for factor probability.
+    /// * `regularized` - Whether to apply regularization.
     pub fn fill_in_factors(&mut self, alpha: f64, beta: f64, regularized: bool) {
         for node in &mut self.nodes {
             node.fill_in_factor(alpha, beta, regularized);
         }
     }
 
+    /// Returns the IDs of neighbors of a node, given its node ID.
+    ///
+    /// # Arguments
+    /// * `node_id` - The node ID for which neighbors are requested.
+    ///
+    /// # Returns
+    /// A vector of node IDs representing neighbors.
     pub fn get_neighbors_from_id(&self, node_id: i32) -> Vec<i32> {
         self.get_neighbors(self.get_node(node_id))
     }
 
+    /// Returns the IDs of neighbors for a given node.
+    ///
+    /// # Arguments
+    /// * `node` - Reference to the `Node` whose neighbors are requested.
+    ///
+    /// # Returns
+    /// A vector of node IDs representing neighbors.
     pub fn get_neighbors(&self, node: &Node) -> Vec<i32> {
         let mut neighbors = Vec::with_capacity(node.neighbors_count() as usize);
         for edge_id in node.get_incident_edges() {
@@ -308,23 +404,63 @@ impl CTFactorGraph {
         neighbors
     }
 
+    /// Returns the node ID of a neighbor given a node and its neighbor ID.
+    ///
+    /// # Arguments
+    /// * `node` - Reference to the node.
+    /// * `neighbor_id` - Index of the neighbor within the nodes neighbors.
+    ///
+    /// # Returns
+    /// Node ID of the neighbor.
     pub fn get_neighbor_node_id(&self, node: &Node, neighbor_id: i32) -> i32 {
         let (node1_id, node2_id) = self.edges[node.get_incident_edge(neighbor_id) as usize].get_node_ids();
         if node1_id == node.get_id() { node2_id } else { node1_id }
     }
 
+    /// Returns the index of a neighbor in a node's neighbor list.
+    ///
+    /// # Arguments
+    /// * `node` - Reference to the node.
+    /// * `neighbor_id` - ID of the neighbor.
+    ///
+    /// # Returns
+    /// Index position of the neighbor in the node's neighbor list.
+    ///
+    /// # Panics
+    /// Panics if the neighbor is not connected to the node.
     pub fn get_neighbor_index(&self, node: &Node, neighbor_id: i32) -> i32 {
         self.get_neighbors(node).iter().position(|id| *id == neighbor_id).expect(
             &format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node.get_id())
         ) as i32
     }
 
+    /// Returns the index of a neighbor from node ID and neighbor ID.
+    ///
+    /// # Arguments
+    /// * `node_id` - ID of the node.
+    /// * `neighbor_id` - ID of the neighbor.
+    ///
+    /// # Returns
+    /// Index position of the neighbor in the node's neighbor list.
+    ///
+    /// # Panics
+    /// Panics if the neighbor is not connected to the node.
     pub fn get_neighbor_index_from_id(&self, node_id: i32, neighbor_id: i32) -> i32 {
         self.get_neighbors_from_id(node_id).iter().position(|id| *id == neighbor_id).expect(
             &format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node_id)
         ) as i32
     }
 
+    /// Returns the peptide node ID connected to a factor node.
+    ///
+    /// # Arguments
+    /// * `factor_id` - ID of the factor node.
+    ///
+    /// # Returns
+    /// `Ok(i32)` containing the peptide node ID if found.
+    ///
+    /// # Errors
+    /// Returns an error if no peptide node is connected to the factor node.
     pub fn get_peptide_for_factor(&self, factor_id: i32) -> Result<i32, Box<dyn std::error::Error>> {
         let neighbors = self.get_neighbors_from_id(factor_id);
         for neighbor_id in neighbors {
@@ -336,6 +472,7 @@ impl CTFactorGraph {
         return Err(format!("Peptide not found for factor with id {}", factor_id).into());
     }
 
+    /// Adds convolution tree nodes to the graph, creating edges appropriately.
     pub fn add_ct_nodes(&mut self) {
         // When creating the CTGraph and not just reading from a previously saved graph format, use this function to add the CT nodes
         
@@ -418,7 +555,10 @@ impl CTFactorGraph {
         self.edges = new_edges;
     }
 
-    /// Finds the connected components in an undirected graph and returns a Vec of Vecs containing nodes in each component.
+    /// Returns a vector of connected components in the graph as separate `CTFactorGraph`s.
+    ///
+    /// # Returns
+    /// A vector of `CTFactorGraph` instances, one per connected component.
     pub fn connected_components(&self) -> Vec<Self> {
         let mut visited: HashSet<i32> = HashSet::new();
         let mut components: Vec<Self> = Vec::new();

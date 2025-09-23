@@ -4,8 +4,21 @@ use crate::random::select_random_samples_with_weights;
 use csv::Writer;
 use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
 
-/// Weight inferred taxa based on their (1) degeneracy and (2) their proteome size.
-/// Parameters
+/// Represents the main pipeline for weighting taxa based on peptide evidence.
+///
+/// # Arguments
+///
+/// * `pep_taxa` - JSON string mapping peptide sequences to lists of taxon IDs.
+/// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
+/// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
+/// * `max_taxa` - Maximum number of taxa to include in output.
+/// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
+///
+/// # Returns
+///
+/// Tuple `(sequence_csv, taxa_weights_csv)`:
+/// * `sequence_csv` - CSV string of peptide sequences and their weights.
+/// * `taxa_weights_csv` - CSV string of taxa weights and uniqueness.
 pub fn perform_taxa_weighing(
     pep_taxa: String,
     pep_scores: String,
@@ -111,6 +124,23 @@ pub fn perform_taxa_weighing(
     (sequence_csv, taxa_weights_csv)
 }
 
+/// Generates a CSV for sequences with associated taxonomic weights and scores.
+///
+/// # Arguments
+///
+/// * `taxa_to_include` - Optional set of taxa IDs to filter the output.
+/// * `filter_taxa` - Whether to filter sequences based on `taxa_to_include`.
+/// * `sequences` - List of peptide sequences.
+/// * `scores` - List of peptide scores corresponding to `sequences`.
+/// * `psms` - List of PSM counts corresponding to `sequences`.
+/// * `higher_taxa` - List of lists of higher taxa IDs for each sequence.
+/// * `weights` - Computed weights for each sequence.
+/// * `log_weights` - Log-transformed weights for each sequence.
+///
+/// # Returns
+///
+/// CSV string containing one row per peptide-taxon pair with columns:
+/// "id", "sequence", "score", "psms", "higher_taxa", "weight", "log_weight".
 fn generate_sequence_csv(taxa_to_include: Option<HashSet<i32>>, filter_taxa: bool, sequences: Vec<String>, scores: Vec<f32>, psms: Vec<i32>, higher_taxa: Vec<Vec<i32>>, weights: Vec<f32>, log_weights: Vec<f32>) -> String {
 
     let mut wtr = Writer::from_writer(vec![]);
@@ -140,6 +170,17 @@ fn generate_sequence_csv(taxa_to_include: Option<HashSet<i32>>, filter_taxa: boo
     csv
 }
 
+/// Generates a CSV of taxa weights.
+///
+/// # Arguments
+///
+/// * `higher_taxa` - List of taxon IDs.
+/// * `higher_taxid_weights` - List of computed weights corresponding to `higher_taxa`.
+/// * `higher_taxid_unique` - List indicating whether each taxon is uniquely associated with a peptide.
+///
+/// # Returns
+///
+/// CSV string with columns: "id", "higher_taxa", "scaled_weight", "unique".
 fn generate_taxa_weights_csv(higher_taxa: Vec<i32>, higher_taxid_weights: Vec<f32>, higher_taxid_unique: Vec<bool>) -> String {
     let mut wtr = Writer::from_writer(vec![]);
 
@@ -160,6 +201,12 @@ fn generate_taxa_weights_csv(higher_taxa: Vec<i32>, higher_taxid_weights: Vec<f3
     
 }
 
+/// Maps taxa lists onto the taxonomic rank specified by the user.
+///
+/// # Arguments
+///
+/// * `taxa` - Mutable reference to a vector of vectors of taxon IDs.
+/// * `taxa_rank` - The desired taxonomic rank to normalize to (e.g., "species").
 fn normalize_unipept_responses(taxa: &mut Vec<Vec<i32>>, taxa_rank: &str) {
     
     let mut lineage_cache: HashMap<i32, Vec<Option<i32>>> = HashMap::new();
@@ -170,6 +217,17 @@ fn normalize_unipept_responses(taxa: &mut Vec<Vec<i32>>, taxa_rank: &str) {
     }
 }
 
+/// Selects `n` random indices from `taxa` vectors, weighted by inverse degeneracy.
+///
+/// # Arguments
+///
+/// * `taxa` - Vector of vectors of taxon IDs for each peptide.
+/// * `n` - Number of random samples to select.
+///
+/// # Returns
+///
+/// A `HashSet` of selected indices, chosen with probability proportional to
+/// `1 / number_of_taxa_per_peptide`.
 fn weighted_random_sample(taxa: &Vec<Vec<i32>>, n: usize) -> HashSet<usize> {
     
     // Calculate normalized weights based on the length of the taxa array

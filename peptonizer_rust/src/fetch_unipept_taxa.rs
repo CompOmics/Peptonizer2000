@@ -2,6 +2,18 @@ use crate::unipept_communicator::{get_taxa_for_peptides, get_descendants_for_tax
 use std::collections::{HashMap, HashSet};
 
 
+/// Fetches taxa for peptides and filters them by rank and taxon query.
+///
+/// # Arguments
+/// * `peptides` - JSON string of peptide sequences.
+/// * `rank` - Taxonomic rank used for filtering (e.g. "species").
+/// * `taxon_query` - JSON string of taxon IDs to filter against.
+///
+/// # Returns
+/// JSON string mapping peptides to filtered taxon IDs.
+///
+/// # Panics
+/// Panics if input JSON cannot be parsed or if result cannot be serialized.
 pub fn fetch_peptides_and_filter_taxa(
     peptides: String,
     rank: String,

@@ -3,6 +3,22 @@ use js_sys::Math;
 
 use std::collections::HashSet;
 
+/// Selects `n` unique random sample indices from a list of weights.
+///
+/// The selection is based on weighted probabilities, where higher weights increase
+/// the likelihood of being chosen. Sampling is without replacement (indices are unique).
+///
+/// # Arguments
+/// * `weights` - Vector of non-negative weights for each element.
+/// * `n` - Number of unique indices to select.
+///
+/// # Returns
+/// A `HashSet<usize>` containing the selected indices.
+///
+/// # Errors
+/// This function will panic if:
+/// * `weights` is empty.
+/// * `n` is larger than `weights.len()`.
 #[cfg(target_arch = "wasm32")]
 pub fn select_random_samples_with_weights(
     weights: Vec<f64>,
@@ -33,6 +49,22 @@ pub fn select_random_samples_with_weights(
     samples
 }
 
+/// Selects `n` unique random sample indices from a list of weights.
+///
+/// The selection is based on weighted probabilities, where higher weights increase
+/// the likelihood of being chosen. Sampling is without replacement (indices are unique).
+///
+/// # Arguments
+/// * `weights` - Vector of non-negative weights for each element.
+/// * `n` - Number of unique indices to select.
+///
+/// # Returns
+/// A `HashSet<usize>` containing the selected indices.
+///
+/// # Errors
+/// This function will panic if:
+/// * `weights` is empty.
+/// * `n` is larger than `weights.len()`.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn select_random_samples_with_weights(
     weights: Vec<f64>,

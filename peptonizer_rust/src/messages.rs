@@ -5,14 +5,28 @@ use std::mem;
 use crate::array_utils::*;
 use crate::convolution_tree::ConvolutionTree;
 
+
+/// Represents belief values stored in different node types of the factor graph.
 #[derive(Debug, Clone)]
 pub enum NodeBelief {
+    /// Belief for peptide nodes: two probabilities (inactive, active).
     PeptideBelief(f64, f64),
+    /// Belief for factor nodes: list of probability pairs.
     FactorBelief(Vec<[f64;2]>),
+    /// Belief for taxon nodes: two probabilities (inactive, active).
     TaxonBelief(f64, f64),
+    /// Belief placeholder for convolution tree nodes.
     ConvolutionTreeBelief
 }
 
+
+/// Get the initial belief for a node based on its subtype.
+///
+/// # Arguments
+/// * `node` - Reference to the node.
+///
+/// # Returns
+/// The corresponding `NodeBelief`.
 pub fn get_initial_belief(node: &Node) -> NodeBelief {
     match node.get_subtype() {
         NodeType::PeptideNode { initial_belief_0, initial_belief_1 } => NodeBelief::PeptideBelief(*initial_belief_0, *initial_belief_1),
@@ -22,7 +36,13 @@ pub fn get_initial_belief(node: &Node) -> NodeBelief {
     }
 }
 
+
 impl NodeBelief {
+
+    /// Returns all stored belief values as a flat vector.
+    ///
+    /// # Returns
+    /// Vector of belief values.
     pub fn values(&self) -> Vec<f64> {
         match self {
             NodeBelief::PeptideBelief(a, b) => vec![*a, *b],
@@ -32,6 +52,10 @@ impl NodeBelief {
         }
     }
 
+    /// Returns factor values if this is a factor belief.
+    ///
+    /// # Returns
+    /// `Some(Vec<[f64; 2]>)` if factor, otherwise `None`.
     pub fn factor_values(&self) -> Option<Vec<[f64; 2]>> {
         match self {
             NodeBelief::FactorBelief(vec) => Some(vec.clone()),
@@ -40,6 +64,8 @@ impl NodeBelief {
     }
 }
 
+
+/// Handles message passing and belief propagation in a convolution tree factor graph.
 pub struct Messages {
     graph: CTFactorGraph,
     max_val: Option<(i32, i32)>,
@@ -54,8 +80,16 @@ pub struct Messages {
     msg_in_log: Vec<Vec<Vec<f64>>>
 }
 
+
 impl Messages {
 
+    /// Constructs a new `Messages` instance for the given graph.
+    ///
+    /// # Arguments
+    /// * `ct_graph_in` - Factor graph to initialize messages from.
+    ///
+    /// # Returns
+    /// Initialized `Messages` object.
     pub fn new(ct_graph_in: CTFactorGraph) -> Messages {
         let max_val: Option<(i32, i32)> = None;
         
@@ -104,6 +138,14 @@ impl Messages {
 
     }
 
+    /// Runs zero-lookahead belief propagation until convergence or limit.
+    ///
+    /// # Arguments
+    /// * `max_loops` - Maximum number of iterations.
+    /// * `tolerance` - Residual threshold for convergence.
+    ///
+    /// # Returns
+    /// Final node beliefs as a list of value vectors.
     pub fn zero_lookahead_bp(&mut self, max_loops: i32, tolerance: f64) -> Vec<Vec<f64>> {
 
         let mut max_residual: f64 = f64::MAX;
@@ -213,6 +255,10 @@ impl Messages {
         self.current_beliefs.iter().map(|b| b.values()).collect()
     }
 
+    /// Updates all outgoing messages from all nodes.
+    ///
+    /// # Arguments
+    /// * `local_loops` - If true, update only local region around last max residual.
     fn compute_update(&mut self, local_loops: bool) {
         let mut checked_cts: HashSet<i32> = HashSet::new();
         
@@ -236,6 +282,13 @@ impl Messages {
         }
     }
 
+    /// Updates a single message along an edge.
+    ///
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// * `checked_cts` - Optional set of already updated convolution tree nodes.
     fn single_message_update(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32, mut checked_cts: Option<&mut HashSet<i32>>) {
 
         let start_node: &Node = self.graph.get_node(start_id);
@@ -263,6 +316,15 @@ impl Messages {
         };
     }
 
+    /// Computes outgoing message for variable (peptide/taxon) nodes.
+    ///
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// 
+    /// # Returns
+    /// Normalized probability vector.
     fn compute_out_message_variable(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32) -> Vec<f64> {
         
         let start_node = self.graph.get_node(start_id);
@@ -303,6 +365,15 @@ impl Messages {
         out_message_log
     }
 
+    /// Computes outgoing message for factor nodes.
+    ///
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// 
+    /// # Returns
+    /// Normalized probability vector.
     fn compute_out_message_factor(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32) -> Vec<f64> {
         let end_node = self.graph.get_node(end_id);
         let mut incoming_messages_end: Vec<Vec<f64>> = self.msg_in[start_id as usize].clone();
@@ -355,6 +426,11 @@ impl Messages {
         }
     }
 
+    /// Computes outgoing messages for convolution tree nodes.
+    ///
+    /// # Arguments
+    /// * `start_id` - Node ID of convolution tree.
+    /// * `number_of_parents` - Number of parent nodes.
     fn compute_out_messages_ct_tree(&mut self, start_id: i32, number_of_parents: i32) {
         let start_node = self.graph.get_node(start_id);
 
@@ -430,6 +506,14 @@ impl Messages {
         }
     }
 
+    /// Computes infinity norm residual for an edge.
+    ///
+    /// # Arguments
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// 
+    /// # Returns
+    /// Residual as `f64`.
     fn compute_infinity_norm_residual(&mut self, end_id: usize, start_in_end_id: usize) -> f64 {
         let msg1: &mut Vec<f64> = &mut self.msg_in[end_id][start_in_end_id];
         let msg2: &mut Vec<f64> = &mut self.msg_in_log[end_id][start_in_end_id];
@@ -448,6 +532,13 @@ impl Messages {
         residual
     }
 
+    /// Updates total residuals after a message update.
+    /// 
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// * `current_residual` - Redidual to add to message
     fn compute_total_residuals(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32, current_residual: f64) {
         let start_node = self.graph.get_node(start_id);
         let end_node = self.graph.get_node(end_id);
@@ -467,6 +558,12 @@ impl Messages {
         }
     }
 
+    /// Updates message priorities for scheduling.
+    /// 
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
     fn compute_priority(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32) {
         let end_node = self.graph.get_node(end_id);
 

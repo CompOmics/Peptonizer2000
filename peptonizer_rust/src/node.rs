@@ -3,21 +3,31 @@ use minidom::Element;
 use serde::Serialize;
 use std::fmt::Write;
 
+/// Represents a noisy-OR conditional probability distribution (CPD) for factor nodes.
 #[derive(Debug, Serialize, Clone)]
 pub struct Factor {
-    // represents noisy OR cpds, has dimension n(parensports)xn(peptide states(=2))
+    /// CPD array with dimensions n(parents) × 2 (inactive/active).
     pub array: Vec<[f64; 2]>,
+    /// Labels for the CPD entries.
     pub array_labels: Vec<String>
 }
 
+
+/// Defines the type of node in the factor graph with its initial beliefs.
 #[derive(Debug, Serialize, Clone)]
 pub enum NodeType {
+    /// Peptide node with prior probabilities.
     PeptideNode { initial_belief_0: f64, initial_belief_1: f64 },
+    /// Factor node with parent count and CPD.
     FactorNode { parent_number: i32, initial_belief: Factor },
+    /// Taxon node with prior probabilities.
     TaxonNode { initial_belief_0: f64, initial_belief_1: f64 },
+    /// Convolution tree node with a number of parents.
     ConvolutionTreeNode { number_of_parents: i32 }
 }
 
+
+/// Represents a node in the factor graph with its attributes and connections.
 #[derive(Debug, Clone)]
 pub struct Node {
     id: i32,
@@ -26,60 +36,114 @@ pub struct Node {
     subtype: NodeType
 }
 
+
 impl Node {
 
+    /// Creates a new node with given ID, name, and subtype.
+    ///
+    /// # Arguments
+    /// * `id` - Unique node identifier.
+    /// * `name` - Node label.
+    /// * `subtype` - Type of the node with initial state.
+    ///
+    /// # Returns
+    /// A new `Node`.
     pub fn new(id: i32, name: String, subtype: NodeType) -> Self {
         let incident_edges: Vec<i32> = Vec::new();
      
         Self { id, name, incident_edges, subtype }
     }
 
+    /// Creates a copy of the node with a new ID.
+    ///
+    /// # Arguments
+    /// * `new_id` - Replacement node ID.
+    ///
+    /// # Returns
+    /// A cloned node with updated ID.
     pub fn copy_with_id(&self, new_id: i32) -> Self {
         let mut copy: Node = self.clone();
         copy.id = new_id;
         copy
     }
 
+    /// Creates a new convolution tree node.
+    ///
+    /// # Arguments
+    /// * `id` - Node ID.
+    /// * `name` - Node label.
+    /// * `number_of_parents` - Number of parents in convolution tree.
+    ///
+    /// # Returns
+    /// A new convolution tree node.
     pub fn new_convolution_node(id: i32, name: String, number_of_parents: i32) -> Self {
         Self { id, name, incident_edges: Vec::new(), subtype: NodeType::ConvolutionTreeNode { number_of_parents } }
     }
 
+    /// Adds an incident edge to the node.
+    ///
+    /// # Arguments
+    /// * `edge` - Edge identifier.
     pub fn add_incident_edge(&mut self, edge: i32) {
         self.incident_edges.push(edge);
     }
 
+    /// Returns the node's name.
     pub fn get_name(&self) -> &str { 
         &self.name
     }
 
+    /// Returns the node's ID.
     pub fn get_id(&self) -> i32 {
         self.id
     }
 
+    /// Returns a reference to the node subtype.
     pub fn get_subtype(&self) -> &NodeType {
         &self.subtype
     }
 
+    /// Updates the node subtype.
+    ///
+    /// # Arguments
+    /// * `subtype` - New subtype for the node.
     pub fn set_subtype(&mut self, subtype: NodeType) {
         self.subtype = subtype;
     }
 
+    /// Returns the number of neighbors of the node.
     pub fn neighbors_count(&self) -> usize {
         self.incident_edges.len()
     }
 
+    /// Returns a specific incident edge by neighbor index within the nodes neighbors.
+    ///
+    /// # Arguments
+    /// * `neighbor_id` - Index of neighbor.
+    ///
+    /// # Returns
+    /// Edge identifier.
     pub fn get_incident_edge(&self, neighbor_id: i32) -> i32 {
         self.incident_edges[neighbor_id as usize]
     }
 
+    /// Returns all incident edges.
     pub fn get_incident_edges(&self) -> &Vec<i32> {
         &self.incident_edges
     }
 
+    /// Replaces incident edges with a new list.
+    ///
+    /// # Arguments
+    /// * `new_incident_edges` - Replacement edge list.
     pub fn set_incident_edges(&mut self, new_incident_edges: Vec<i32>) {
         self.incident_edges = new_incident_edges;
     }
 
+    /// Returns the node category as a string.
+    ///
+    /// # Returns
+    /// `"peptide"`, `"factor"`, `"taxon"`, or `"convolution_tree"`.
     pub fn category(&self) -> &str {
         match self.subtype {
             NodeType::PeptideNode { .. } => "peptide",
@@ -89,20 +153,32 @@ impl Node {
         }
     }
 
+    /// Checks if the node is a factor node.
     pub fn is_factor_node(&self) -> bool {
         matches!(self.subtype, NodeType::FactorNode { .. })
     }
 
+    /// Checks if the node is a taxon node.
     pub fn is_taxon_node(&self) -> bool {
         matches!(self.subtype, NodeType::TaxonNode { .. })
     }
 
+    /// Updates prior belief for taxon nodes.
+    ///
+    /// # Arguments
+    /// * `prior` - Probability to assign as active.
     pub fn fill_in_prior(&mut self, prior: f64) {
         if matches!(self.subtype, NodeType::TaxonNode { .. }) {
             self.subtype = NodeType::TaxonNode { initial_belief_0: 1.0 - prior, initial_belief_1: prior };
         }
     }
 
+    /// Initializes factor CPD with noisy-OR parameters.
+    ///
+    /// # Arguments
+    /// * `alpha` - Peptide detection probability.
+    /// * `beta` - Noise parameter.
+    /// * `regularized` - Whether to apply parent-count regularization.
     pub fn fill_in_factor(&mut self, alpha: f64, beta: f64, regularized: bool) {
         if let NodeType::FactorNode { parent_number, .. } = self.subtype {
             let degree: i32 = parent_number;
@@ -150,6 +226,12 @@ impl Node {
         }
     }
 
+    /// Normalizes CPD values in-place.
+    ///
+    /// # Arguments
+    /// * `arr` - CPD array.
+    /// * `sum` - Normalization constant.
+    /// * `avoid_underflow` - If true, enforce minimum values.
     fn normalize_cpd(arr: &mut Vec<[f64; 2]>, sum: f64, avoid_underflow: bool) {
         for cpd in arr.iter_mut() {
             cpd[0] /= sum;
@@ -166,6 +248,13 @@ impl Node {
         }
     }
 
+    /// Parses key-value data from a GraphML element.
+    ///
+    /// # Arguments
+    /// * `data` - GraphML `<data>` element.
+    ///
+    /// # Returns
+    /// A `(key, value)` pair.
     fn parse_data(data: &Element) -> (String, String) {
         let key = data.attr("key").unwrap().to_string();
         let value = data.text();
@@ -173,6 +262,14 @@ impl Node {
         (key, value)
     }
 
+    /// Parses a GraphML `<node>` element into a `Node`.
+    ///
+    /// # Arguments
+    /// * `node` - GraphML element to parse.
+    /// * `id` - Node ID.
+    ///
+    /// # Returns
+    /// A new `Node` or error if subtype is unknown.
     pub fn parse_node(node: &Element, id: i32) -> Result<Self, String> {
         // Process a node
         let name = node.attr("id").unwrap().to_string();
@@ -208,6 +305,10 @@ impl Node {
         Ok(Self { id, name, incident_edges: Vec::new(), subtype })
     }
 
+    /// Serializes the node into GraphML string format.
+    ///
+    /// # Returns
+    /// A GraphML representation of the node.
     pub fn to_graphml(&self) -> String {
 
         let mut graphml = String::new();

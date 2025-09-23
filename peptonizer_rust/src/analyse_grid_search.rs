@@ -2,6 +2,20 @@ use std::collections::{HashSet, HashMap};
 use crate::taxa_clustering::{Taxon, parse_taxon_csv};
 use crate::utils::log;
 
+
+/// Computes a "goodness" score for clustering results by combining
+/// ranking similarity (via rank-biased overlap) and diversity (via entropy).
+/// 
+/// # Arguments
+/// * `clustered_taxa_weights_csv` - Path to a CSV file containing clustered taxa weights.
+/// * `peptonizer_results` - JSON string containing taxa scores produced by Peptonizer.
+/// 
+/// # Returns
+/// A `Result<f64, Box<dyn std::error::Error>>` containing the computed goodness score,
+/// or an error if parsing fails.
+/// 
+/// # Errors
+/// This function may return an error if the input CSV or JSON cannot be parsed.
 pub fn compute_goodness(
     clustered_taxa_weights_csv: String, 
     peptonizer_results: String
@@ -27,6 +41,15 @@ pub fn compute_goodness(
 }
 
 
+/// Computes the Rank-Biased Overlap (RBO) between two ranked lists of taxon IDs.
+/// RBO measures the agreement between two ranked lists, emphasizing higher ranks.
+/// 
+/// # Arguments
+/// * `list1` - First ranked list of taxon IDs.
+/// * `list2` - Second ranked list of taxon IDs.
+/// 
+/// # Returns
+/// A value between 0.0 and 1.0 representing the similarity of the two ranked lists.
 fn rbo(list1: &[i32], list2: &[i32]) -> f64 {
     let k = list1.len().min(list2.len());
     let mut sum = 0.0;
@@ -48,6 +71,14 @@ fn rbo(list1: &[i32], list2: &[i32]) -> f64 {
 }
 
 
+/// Calculates the Shannon entropy of a set of values.
+/// Entropy measures the diversity or unpredictability of a distribution.
+/// 
+/// # Arguments
+/// * `values` - A slice of floating-point values representing weights or probabilities.
+/// 
+/// # Returns
+/// The entropy as a floating-point value. Returns 0.0 if all values sum to zero.
 fn entropy(values: &[f64]) -> f64 {
     let sum: f64 = values.iter().sum();
 

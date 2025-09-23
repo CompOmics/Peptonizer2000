@@ -6,12 +6,21 @@ use serde_json;
 use std::io::Cursor;
 use csv::ReaderBuilder;
 
-/// Performs bayesian inference through loopy belief propagation, returns dictionary {variable:posterior_probability}
+
+/// Calibrates multiple subgraphs (connected components) of a factor graph using loopy belief propagation.
 ///
 /// # Arguments
-/// * ct_factor_graphs: list, contains FactorGraph objects on which inference can be performed
-/// * max_iterations: int, max number of iterations in case of non-convergence
-/// * tolerance: float, error tolerance between messages for convergence criterion
+///
+/// * `ct_factor_graphs` - Vector of `CTFactorGraph` objects representing connected subgraphs of the full factor graph.
+/// * `max_iterations` - Maximum number of iterations for message passing in case of non-convergence.
+/// * `tolerance` - Convergence criterion; the maximum allowable change in messages between iterations.
+///
+/// # Returns
+///
+/// Tuple `(node_names, node_categories, results)`:
+/// * `node_names` - Vector of node names in the same order as the belief results.
+/// * `node_categories` - Vector of node types (categories) corresponding to the nodes.
+/// * `results` - Vector of belief distributions for each node; each element is a vector `[P(0), P(1)]`.
 fn calibrate_all_subgraphs(
     ct_factor_graphs: Vec<CTFactorGraph>,
     max_iterations: i32,
@@ -39,9 +48,27 @@ fn calibrate_all_subgraphs(
     (node_names, node_categories, results)
 }
 
-/// Runs the belief propagation algorithm on a graph that's represented by the string in graphml_content with the
-/// tuning parameters further specified to this function. This function returns a string that contains the result of
-/// the belief propagation algorithm, represented as a CSV (and can thus directly be written to a CSV-file, if desired).
+
+/// Runs belief propagation on a factor graph provided as a GraphML string.
+///
+/// This function constructs the factor graph, fills in factor tables and priors,
+/// splits the graph into connected components, and performs loopy belief propagation
+/// on each component. The result is returned as a CSV string.
+///
+/// # Arguments
+///
+/// * `graph` - GraphML representation of the factor graph.
+/// * `alpha` - Noisy-OR factor alpha parameter.
+/// * `beta` - Noisy-OR factor beta parameter.
+/// * `regularized` - Whether to regularize factor tables to penalize large numbers of parents.
+/// * `prior` - Prior belief for taxon nodes.
+/// * `max_iter` - Maximum number of belief propagation iterations.
+/// * `tol` - Tolerance threshold for message convergence.
+///
+/// # Returns
+///
+/// CSV string with one row per node containing columns:
+/// `[node_name, posterior_probability_1, node_category]`
 pub fn run_belief_propagation(
     graph: String,
     alpha: f64,
@@ -66,6 +93,18 @@ pub fn run_belief_propagation(
     generate_csv(node_names, node_types, results)
 }
 
+
+/// Generates a CSV string from node names, types, and belief results.
+///
+/// # Arguments
+///
+/// * `node_names` - Vector of node names.
+/// * `node_types` - Vector of node types (categories) corresponding to `node_names`.
+/// * `results` - Vector of belief distributions for each node; each element is a vector `[P(0), P(1)]`.
+///
+/// # Returns
+///
+/// CSV string with columns `[node_name, posterior_probability_1, node_category]`.
 fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<Vec<f64>>) -> String {
 
     let mut wtr = Writer::from_writer(vec![]);
@@ -83,6 +122,18 @@ fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<V
     csv
 }
 
+
+/// Parses a CSV string of belief propagation results and extracts taxon scores.
+///
+/// Only rows with type "taxon" are included. The results are sorted by score in ascending order.
+///
+/// # Arguments
+///
+/// * `csv_content` - CSV string with columns `[id, score, type]`.
+///
+/// # Returns
+///
+/// JSON string mapping taxon IDs (`i32`) to their posterior probabilities (`f64`), sorted by score.
 pub fn parse_taxon_scores(csv_content: String) -> String {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)

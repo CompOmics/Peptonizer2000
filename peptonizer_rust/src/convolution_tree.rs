@@ -8,7 +8,12 @@ struct CTNode {
 }
 
 impl CTNode {
-    /// Create a new CTNode with a given probability vector.
+    /// Creates a new CTNode with a given probability vector.
+    /// 
+    /// Normalizes the input vector so that it sums to 1.
+    /// 
+    /// # Arguments
+    /// * `joint_above` - A vector of probabilities for this node.
     fn new(mut joint_above: Vec<f64>) -> Self {
         normalize(&mut joint_above);
         Self {
@@ -17,14 +22,28 @@ impl CTNode {
         }
     }
 
-    /// Creates a count node by convolving two parent nodes.
+    /// Creates a count node by convolving the joint distributions of two child nodes.
+    /// 
+    /// # Arguments
+    /// * `lhs` - Left child node.
+    /// * `rhs` - Right child node.
+    /// 
+    /// # Returns
+    /// A new CTNode representing the combined distribution.
     fn create_count_node(lhs: CTNode, rhs: CTNode) -> CTNode {
         let joint_above = fft_convolve(&lhs.joint_above, &rhs.joint_above);
         let node = CTNode::new(joint_above);
         node
     }
 
-    /// Computes the upward message by convolving with the given probability vector.
+    /// Computes the upward message by convolving the likelihood below with a sibling's distribution.
+    /// 
+    /// # Arguments
+    /// * `answer_size` - Size of the output message.
+    /// * `other_joint_vector` - The joint distribution of the sibling node.
+    /// 
+    /// # Returns
+    /// A normalized probability vector representing the upward message.
     fn message_up(&self, answer_size: usize, other_joint_vector: &Vec<f64>) -> Vec<f64> {
         let likelihood = self.likelihood_below.as_ref().expect("Likelihood below is None!");
         let starting_point = other_joint_vector.len() - 1;
@@ -37,15 +56,10 @@ impl CTNode {
         result
     }
 
-    /// Computes posterior probability.
-    fn posterior(&self) -> Vec<f64> {
-        let likelihood = self.likelihood_below.as_ref().expect("Likelihood below is None!");
-        let mut result = self.joint_above.iter().zip(likelihood.iter()).map(|(a, b)| a * b).collect();
-        normalize(&mut result);
-        result
-    }
-
-    /// Returns messages up.
+    /// Returns the likelihood messages from below for this node.
+    /// 
+    /// # Returns
+    /// A vector of probabilities from the likelihood below.
     fn messages_up(&self) -> Vec<f64> {
         self.likelihood_below.clone().expect("Likelihood below is None!")
     }
@@ -61,7 +75,14 @@ pub struct ConvolutionTree {
 }
 
 impl ConvolutionTree {
-    /// Constructs a ConvolutionTree.
+    /// Constructs a ConvolutionTree given shared likelihoods and protein probability vectors.
+    /// 
+    /// # Arguments
+    /// * `n_to_shared_likelihoods` - Shared likelihoods vector.
+    /// * `proteins` - A vector of protein probability distributions.
+    /// 
+    /// # Returns
+    /// A fully constructed ConvolutionTree with messages propagated backward.
     pub fn new(n_to_shared_likelihoods: Vec<f64>, proteins: Vec<Vec<f64>>) -> Self {
         let log_length = (proteins.len() as f64).log2().ceil() as usize;
         let mut tree = ConvolutionTree {
@@ -79,7 +100,11 @@ impl ConvolutionTree {
         tree
     }
 
-    /// Builds the first layer of the tree (protein nodes).
+    /// Builds the first layer of the tree from protein probability vectors.
+    /// Pads with dummy nodes to make the layer length a power of 2.
+    /// 
+    /// # Arguments
+    /// * `proteins` - A vector of protein probability distributions.
     fn build_first_layer(&mut self, proteins: Vec<Vec<f64>>) {
         let mut layer = proteins.into_iter().map(CTNode::new).collect::<Vec<CTNode>>();
 
@@ -91,7 +116,8 @@ impl ConvolutionTree {
         self.all_layers.push(layer);
     }
 
-    /// Builds the remaining layers using count nodes.
+    /// Builds all remaining layers of the tree by combining nodes into count nodes.
+    /// Each layer is constructed by convolving pairs of nodes from the previous layer.
     fn build_remaining_layers(&mut self) {
         for _ in 0..self.log_length {
             let most_recent_layer = self.all_layers.last().unwrap();
@@ -111,7 +137,8 @@ impl ConvolutionTree {
         self.all_layers.last_mut().unwrap()[0].likelihood_below = Some(likelihood_below);
     }
 
-    /// Propagates messages backwards through the tree.
+    /// Propagates likelihood messages from the root down to the protein nodes.
+    /// Updates each node's `likelihood_below` using upward messages from parent nodes.
     fn propagate_backward(&mut self) {
         for l in (1..=self.log_length).rev() {
             for i in 0..self.all_layers[l].len() {
@@ -131,14 +158,21 @@ impl ConvolutionTree {
         self.protein_layer = self.all_layers[0].clone();
     }
 
-    fn posterior_for_variable(&self, prot_idx: usize) -> Vec<f64> {
-        self.protein_layer[prot_idx].posterior()
-    }
-
+    /// Retrieves the message to a variable node (protein).
+    /// 
+    /// # Arguments
+    /// * `prot_idx` - Index of the protein node.
+    /// 
+    /// # Returns
+    /// A probability vector representing the message to that protein.
     pub fn message_to_variable(&self, prot_idx: usize) -> Vec<f64> {
         self.protein_layer[prot_idx].messages_up()
     }
 
+    /// Retrieves the message to the shared likelihood node.
+    /// 
+    /// # Returns
+    /// A probability vector representing the message to the shared likelihood.
     pub fn message_to_shared_likelihood(&self) -> Vec<f64> {
 
         // Extract the required range
@@ -146,7 +180,15 @@ impl ConvolutionTree {
     }
 }
 
-/// Performs FFT-based convolution using `rustfft`.
+
+/// Performs FFT-based convolution of two probability vectors.
+/// 
+/// # Arguments
+/// * `a` - First probability vector.
+/// * `b` - Second probability vector.
+/// 
+/// # Returns
+/// A new vector representing the convolution of `a` and `b`.
 fn fft_convolve(a: &Vec<f64>, b: &Vec<f64>) -> Vec<f64> {
     let len = a.len() + b.len() - 1;
     let fft_size = len.next_power_of_two();

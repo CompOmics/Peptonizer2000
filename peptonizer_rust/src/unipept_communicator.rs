@@ -4,13 +4,22 @@ use crate::http_client::*;
 use serde::{Serialize, Deserialize};
 use serde_json::{ Value };
 
+
+/// Base URL for the UniPept API
 const UNIPEPT_URL: &str = "https://api.unipept.ugent.be";
+/// Endpoint for mapping peptides to filtered taxa
 const UNIPEPT_PEPT2FILTERED_ENDPOINT: &str = "/api/v2/pept2taxa";
+/// Endpoint for retrieving taxonomic lineages
 const UNIPEPT_TAXONOMY_ENDPOINT: &str = "/api/v2/taxonomy";
 
+/// Maximum number of peptides per request to the peptide-to-taxa endpoint
 const UNIPEPT_PEPTIDES_BATCH_SIZE: usize = 2000;
+
+/// Maximum number of taxa per request to the taxonomy endpoint
 const TAXONOMY_ENDPOINT_BATCH_SIZE: usize = 100;
 
+
+/// Standard NCBI taxonomy ranks for lineage retrieval
 const NCBI_RANKS: &[&str] = &[
     "superkingdom",
     "kingdom",
@@ -41,12 +50,15 @@ const NCBI_RANKS: &[&str] = &[
     "forma"
 ];
 
+
+/// Payload structure for requesting taxonomy lineages from UniPept
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyPayload {
     input: Vec<i32>,
     extra: bool
 }
 
+/// Payload structure for mapping peptides to taxa
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPPept2TaxaPayload { 
     input: Vec<String>,
@@ -54,12 +66,14 @@ pub struct HTTPPept2TaxaPayload {
     tryptic: bool
 }
 
+/// Response structure for peptide-to-taxa mapping
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPPept2TaxaResponse {
     peptide: String,
     taxa: Vec<i32>
 }
 
+/// Payload structure for retrieving descendants of taxa at specified ranks
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsPayload {
     input: Vec<i32>,
@@ -67,6 +81,7 @@ pub struct HTTPTaxonomyDescendantsPayload {
     descendants_ranks: Vec<String>
 }
 
+/// Response structure for retrieving descendants of a taxon
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsResponse {
     taxon_id: i32,
@@ -75,6 +90,7 @@ pub struct HTTPTaxonomyDescendantsResponse {
     descendants: Vec<i32>
 }
 
+/// Represents a response from the UniPept taxonomy API
 #[derive(Serialize, Deserialize, Debug)]
 struct TaxonomyResponse {
     taxon_id: i32,
@@ -82,6 +98,13 @@ struct TaxonomyResponse {
 }
 
 
+/// Parses a JSON string returned by the UniPept API into a vector of key-value maps
+///
+/// # Arguments
+/// * `http_response` - JSON string from UniPept API
+///
+/// # Returns
+/// Vector of hash maps, where each key maps to an `Option<i32>` value. Only numeric or null values are retained.
 fn parse_response_json_string(http_response: &str) -> Vec<HashMap<String, Option<i32>>> {
     let http_response_map: Vec<HashMap<String, Option<i32>>> = serde_json::from_str::<Vec<HashMap<String, Value>>>(http_response)
             .unwrap()
@@ -107,6 +130,26 @@ fn parse_response_json_string(http_response: &str) -> Vec<HashMap<String, Option
     http_response_map
 }
 
+/// Retrieves the unique lineage taxa IDs at a specified taxonomic rank.
+///
+/// This function queries the UniPept taxonomy API for the given `target_taxa` and extracts
+/// the taxon IDs at the specified `taxa_rank`. To minimize API requests, it uses a cache
+/// (`lineage_cache`) to store previously fetched lineages. 
+///
+/// # Arguments
+///
+/// * `target_taxa` - A reference to a vector of taxon IDs for which the lineage is requested.
+/// * `taxa_rank` - The target taxonomic rank (e.g., "species", "genus") at which the unique lineage is extracted.
+/// * `lineage_cache` - A mutable reference to a hash map that stores previously fetched lineages.
+///
+/// # Returns
+///
+/// A vector of unique taxon IDs corresponding to the specified `taxa_rank`.
+///
+/// # Panics
+///
+/// The function will panic if:
+/// - The `taxa_rank` does not exist in the predefined `NCBI_RANKS`.
 pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<i32>, taxa_rank: &str, lineage_cache: &mut HashMap<i32, Vec<Option<i32>>>) -> Vec<i32> {
 
     let url: String = [UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT].concat();
