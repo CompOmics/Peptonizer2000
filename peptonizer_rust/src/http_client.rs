@@ -122,3 +122,34 @@ pub fn create_http_client() -> impl HttpClient {
 pub fn create_http_client() -> impl HttpClient {
     PyHttpClient
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Serialize;
+    use serde_json::json;
+
+    #[derive(Serialize)]
+    struct DummyPayload {
+        message: String,
+    }
+
+    #[test]
+    fn test_invalid_url_returns_error() {
+        let client = PyHttpClient;
+        let payload = DummyPayload { message: "hello".to_string() };
+
+        let result = client.perform_post_request("http://invalid_url".to_string(), &payload);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_real_http_post() {
+        let client = PyHttpClient;
+        let payload = json!({ "foo": "bar" });
+
+        let result = client.perform_post_request("https://api.unipept.ugent.be".to_string(), &payload);
+        assert!(result.is_ok());
+    }
+}

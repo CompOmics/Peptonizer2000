@@ -590,3 +590,194 @@ impl Messages {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::{Node, NodeType, Factor};
+    use crate::factor_graph::CTFactorGraph;
+    use std::collections::HashSet;
+    use crate::factor_graph::Edge;
+
+    /// Creates a minimal graph with Peptide -> Factor -> Taxon
+    fn create_minimal_graph() -> CTFactorGraph {
+        let mut nodes: Vec<Node> = Vec::new();
+        let mut edges: Vec<Edge> = Vec::new();
+
+        let peptide_node_1 = Node::new(
+            0,
+            "peptide1".to_string(),
+            NodeType::PeptideNode { initial_belief_0: 0.7, initial_belief_1: 0.3 }
+        );
+        nodes.push(peptide_node_1);
+
+        let factor_node_1 = Node::new(
+            1,
+            "factor1".to_string(),
+            NodeType::FactorNode { 
+                parent_number: 2, 
+                initial_belief: Factor { 
+                    array: vec![[0.6, 0.4], [0.2, 0.8]], 
+                    array_labels: vec!["p0".to_string(), "p1".to_string()] 
+                } 
+            }
+        );
+        nodes.push(factor_node_1);
+
+        let taxon_node_1 = Node::new(
+            2,
+            "taxon_1".to_string(),
+            NodeType::TaxonNode { initial_belief_0: 0.5, initial_belief_1: 0.5 }
+        );
+        nodes.push(taxon_node_1);
+
+        let edge0 = Edge::new(0, 0, 1, None);
+        nodes[0].add_incident_edge(0);
+        nodes[1].add_incident_edge(0);
+        edges.push(edge0);
+
+
+        let edge1 = Edge::new(1, 1, 2, None);
+        nodes[1].add_incident_edge(1);
+        nodes[2].add_incident_edge(1);
+        edges.push(edge1);
+
+
+
+        CTFactorGraph::new(nodes, edges)
+}
+
+    #[test]
+    fn test_get_initial_belief() {
+        let peptide_node = Node::new(
+            0,
+            "peptide1".to_string(),
+            NodeType::PeptideNode { initial_belief_0: 0.6, initial_belief_1: 0.4 }
+        );
+
+        if let NodeType::PeptideNode { initial_belief_0, initial_belief_1 } = peptide_node.get_subtype() {
+            assert!((initial_belief_0 - 0.6).abs() < 1e-10);
+            assert!((initial_belief_1 - 0.4).abs() < 1e-10);
+        } else {
+            panic!("Expected PeptideNode");
+        }
+
+        let factor_node = Node::new(
+            1,
+            "factor1".to_string(),
+            NodeType::FactorNode {
+                parent_number: 2,
+                initial_belief: Factor { array: vec![[0.5, 0.5], [0.3, 0.7]], array_labels: vec!["p0".to_string(), "p1".to_string()] }
+            }
+        );
+
+        if let NodeType::FactorNode { parent_number, initial_belief } = factor_node.get_subtype() {
+            assert_eq!(*parent_number, 2);
+            assert_eq!(initial_belief.array.len(), 2);
+            assert!((initial_belief.array[0][0] - 0.5).abs() < 1e-10);
+            assert!((initial_belief.array[1][1] - 0.7).abs() < 1e-10);
+            assert_eq!(initial_belief.array_labels, vec!["p0".to_string(), "p1".to_string()]);
+        } else {
+            panic!("Expected FactorNode");
+        }
+
+        let taxon_node = Node::new(
+            2,
+            "taxon1".to_string(),
+            NodeType::TaxonNode { initial_belief_0: 0.3, initial_belief_1: 0.7 }
+        );
+
+        if let NodeType::TaxonNode { initial_belief_0, initial_belief_1 } = taxon_node.get_subtype() {
+            assert!((initial_belief_0 - 0.3).abs() < 1e-10);
+            assert!((initial_belief_1 - 0.7).abs() < 1e-10);
+        } else {
+            panic!("Expected TaxonNode");
+        }
+
+        let ct_node = Node::new_convolution_node(3, "ct1".to_string(), 4);
+
+        if let NodeType::ConvolutionTreeNode { number_of_parents } = ct_node.get_subtype() {
+            assert_eq!(*number_of_parents, 4);
+        } else {
+            panic!("Expected ConvolutionTreeNode");
+        }
+    }
+
+    #[test]
+    fn test_nodebelief_values_and_factor_values() {
+        let pb = NodeBelief::PeptideBelief(0.1,0.9);
+        assert_eq!(pb.values(), vec![0.1,0.9]);
+        let fb = NodeBelief::FactorBelief(vec![[0.2,0.8]]);
+        assert_eq!(fb.values(), vec![0.2,0.8]);
+        assert_eq!(fb.factor_values(), Some(vec![[0.2,0.8]]));
+        let tb = NodeBelief::TaxonBelief(0.3,0.7);
+        assert_eq!(tb.values(), vec![0.3,0.7]);
+        let cb = NodeBelief::ConvolutionTreeBelief;
+        assert_eq!(cb.values(), vec![1.0;4]);
+    }
+
+    #[test]
+    fn test_messages_zero_lookahead_bp() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        let beliefs = messages.zero_lookahead_bp(5,1e-6);
+        assert_eq!(beliefs[0].len(),2);
+        assert_eq!(beliefs[2].len(),2);
+        let sum: f64 = beliefs[0].iter().sum();
+        assert!((sum-1.0).abs()<1e-6);
+    }
+
+    #[test]
+    fn test_compute_out_message_variable() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        let msg = messages.compute_out_message_variable(0,1,0);
+        assert_eq!(msg.len(),2);
+        let s: f64 = msg.iter().sum();
+        assert!((s-1.0).abs()<1e-6);
+    }
+
+    #[test]
+    fn test_compute_out_message_factor() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        let msg = messages.compute_out_message_factor(1,2,0);
+        assert_eq!(msg.len(),2);
+        let s: f64 = msg.iter().sum();
+        assert!((s-1.0).abs()<1e-6);
+    }
+
+    #[test]
+    fn test_compute_infinity_norm_residual_and_total_residuals() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        let residual = messages.compute_infinity_norm_residual(0,0);
+        assert!(residual >= 0.0);
+        messages.compute_total_residuals(0,1,0,0.1);
+        assert!(messages.total_residuals[1][0][1] > 0.0);
+    }
+
+    #[test]
+    fn test_compute_priority() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        for node_id in 0..6 {
+            for neighbor_id in 0..2 {
+                messages.priorities.insert((node_id, neighbor_id), 0.1);
+            }
+        }
+        messages.compute_priority(0,2,0);
+        assert!(messages.priorities.get(&(1,0)).is_some());
+    }
+
+    #[test]
+    fn test_single_message_update_and_compute_update() {
+        let graph = create_minimal_graph();
+        let mut messages = Messages::new(graph);
+        let mut checked = HashSet::new();
+        messages.single_message_update(0,1,0,Some(&mut checked));
+        assert!(checked.is_empty() || checked.contains(&0)==false);
+        messages.compute_update(false); 
+    }
+}

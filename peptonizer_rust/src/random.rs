@@ -86,3 +86,45 @@ pub fn select_random_samples_with_weights(
 
     selected_indices
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_basic_sampling() {
+        let weights = vec![1.0, 2.0, 3.0];
+        let samples = select_random_samples_with_weights(weights.clone(), 2);
+
+        assert_eq!(samples.len(), 2);
+        for &idx in &samples {
+            assert!(idx < weights.len());
+        }
+    }
+
+    #[test]
+    fn test_full_sampling() {
+        let weights = vec![0.5, 1.5, 2.0];
+        let samples = select_random_samples_with_weights(weights.clone(), 3);
+
+        // Must return all indices
+        assert_eq!(samples, HashSet::from([0, 1, 2]));
+    }
+
+    #[test]
+    fn test_heavy_weight_bias() {
+        let weights = vec![1000.0, 0.0001, 0.0001];
+        let mut counts = vec![0; 3];
+
+        for _ in 0..100 {
+            let s = select_random_samples_with_weights(weights.clone(), 1);
+            let idx = *s.iter().next().unwrap();
+            counts[idx] += 1;
+        }
+
+        // Index 0 should dominate
+        assert!(counts[0] > 90);
+    }
+}

@@ -239,3 +239,89 @@ fn weighted_random_sample(taxa: &Vec<Vec<i32>>, n: usize) -> HashSet<usize> {
 
     samples
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn test_perform_taxa_weighing_basic() {
+        let pep_taxa_json = r#"{"PEP1":[3000],"PEP2":[3500]}"#.to_string();
+        let pep_scores_json = r#"{"PEP1":0.8,"PEP2":0.5}"#.to_string();
+        let pep_psm_counts_json = r#"{"PEP1":4,"PEP2":2}"#.to_string();
+        let max_taxa = 10;
+        let taxa_rank = "species".to_string();
+
+        let (seq_csv, taxa_csv) = perform_taxa_weighing(
+            pep_taxa_json,
+            pep_scores_json,
+            pep_psm_counts_json,
+            max_taxa,
+            taxa_rank
+        );
+
+        assert!(seq_csv.contains("sequence"));
+        assert!(seq_csv.contains("PEP1"));
+        assert!(taxa_csv.contains("higher_taxa"));
+    }
+
+    #[test]
+    fn test_generate_sequence_csv_basic() {
+        let sequences = vec!["PEP1".to_string(), "PEP2".to_string()];
+        let scores = vec![0.8, 0.5];
+        let psms = vec![4, 2];
+        let higher_taxa = vec![vec![3000], vec![3001]];
+        let weights = vec![0.5, 0.2];
+        let log_weights = vec![0.18, 0.079];
+
+        let csv = generate_sequence_csv(None, false, sequences, scores, psms, higher_taxa, weights, log_weights);
+        assert!(csv.contains("sequence"));
+        assert!(csv.contains("PEP1"));
+        assert!(csv.contains("1"));
+    }
+
+    #[test]
+    fn test_generate_sequence_csv_with_filter() {
+        let sequences = vec!["PEP".to_string()];
+        let scores = vec![0.9];
+        let psms = vec![2];
+        let higher_taxa = vec![vec![10,11,12]];
+        let weights = vec![0.2];
+        let log_weights = vec![0.042];
+        let filter_taxa: HashSet<i32> = vec![11,12].into_iter().collect();
+
+        let csv = generate_sequence_csv(Some(filter_taxa), true, sequences, scores, psms, higher_taxa, weights, log_weights);
+        assert!(csv.contains("12"));
+        assert!(!csv.contains("10")); 
+    }
+
+    #[test]
+    fn test_generate_taxa_weights_csv_basic() {
+        let higher_taxa = vec![1,2];
+        let weights = vec![0.5, 0.8];
+        let unique_flags = vec![true, false];
+
+        let csv = generate_taxa_weights_csv(higher_taxa, weights, unique_flags);
+        assert!(csv.contains("higher_taxa"));
+        assert!(csv.contains("0")); 
+        assert!(csv.contains("true"));
+    }
+
+    #[test]
+    fn test_normalize_unipept_responses_basic() {
+        let mut taxa = vec![vec![3000]];
+        normalize_unipept_responses(&mut taxa, "species");
+        assert!(taxa.iter().all(|v| !v.is_empty()));
+    }
+
+    #[test]
+    fn test_weighted_random_sample_basic() {
+        let taxa = vec![vec![1], vec![2,3], vec![4]];
+        let n = 2;
+        let samples = weighted_random_sample(&taxa, n);
+        assert_eq!(samples.len(), n);
+        assert!(samples.iter().all(|&idx| idx < taxa.len()));
+    }
+}

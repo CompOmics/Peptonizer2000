@@ -165,3 +165,81 @@ pub fn parse_taxon_scores(csv_content: String) -> String {
 
     serde_json::to_string(&taxon_score_dict).unwrap()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_generate_csv_basic() {
+        let node_names = vec!["n1".to_string(), "n2".to_string()];
+        let node_types = vec!["taxon".to_string(), "peptide".to_string()];
+        let results = vec![vec![0.3, 0.7], vec![0.6, 0.4]];
+
+        let csv = generate_csv(node_names, node_types, results);
+
+        assert!(csv.contains("n1"));
+        assert!(csv.contains("0.7"));
+        assert!(csv.contains("taxon"));
+    }
+
+    #[test]
+    fn test_parse_taxon_scores_basic() {
+        let csv_content = "123,0.8,taxon\n456,0.5,taxon\n789,0.9,peptide\n".to_string();
+        let json = parse_taxon_scores(csv_content);
+
+        let parsed: HashMap<i32, f64> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.get(&456), Some(&0.5));
+        assert_eq!(parsed.get(&123), Some(&0.8));
+        assert!(parsed.get(&789).is_none());
+    }
+
+    #[test]
+    fn test_calibrate_all_subgraphs_empty() {
+        let (names, cats, results) = calibrate_all_subgraphs(vec![], 10, 1e-6);
+        assert!(names.is_empty());
+        assert!(cats.is_empty());
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_run_belief_propagation_does_not_crash() {
+        let minimal_graph = r#"<?xml version='1.0' encoding='utf-8'?>
+        <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+            <key id="d1" for="node" attr.name="InitialBelief_1" attr.type="double"/>
+            <key id="d0" for="node" attr.name="InitialBelief_0" attr.type="double"/>
+            <graph edgedefault="undirected">
+                <node id="n0">
+                    <data key="d0">0.0010000000000000009</data>
+                    <data key="d1">0.999</data>
+                    <data key="d2">peptide</data>
+                </node>
+                <node id="n1">
+                    <data key="d0">0.0010000000000000009</data>
+                    <data key="d1">0.999</data>
+                    <data key="d2">peptide</data>
+                </node>
+                <node id="n2">
+                    <data key="d2">taxon</data>
+                </node>
+                <edge source="n0" target="n1"/>
+                <edge source="n1" target="n2"/>
+            </graph>
+        </graphml>
+        "#.to_string();
+
+        let csv = run_belief_propagation(
+            minimal_graph,
+            0.5,   // alpha
+            0.5,   // beta
+            true,  // regularized
+            0.1,   // prior
+            10,    // max_iter
+            1e-6   // tol
+        );
+
+        assert!(csv.contains("n0"));
+    }
+}

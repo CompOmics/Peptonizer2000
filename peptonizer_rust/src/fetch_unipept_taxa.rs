@@ -38,3 +38,37 @@ pub fn fetch_peptides_and_filter_taxa(
 
     serde_json::to_string(&peptides_taxa).unwrap()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn test_fetch_with_known_peptide_and_species() {
+        let peptides = serde_json::to_string(&vec!["TATAAAA".to_string()]).unwrap();
+
+        let taxon_query = serde_json::to_string(&vec![2]).unwrap();
+
+        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query);
+
+        let parsed: Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+
+        assert!(parsed.get("TATAAAA").is_some());
+    }
+
+    #[test]
+    fn test_empty_peptides_and_taxa() {
+        let peptides = "[]".to_string();
+        let taxon_query = "[]".to_string();
+
+        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query);
+
+        let parsed: Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+
+        assert_eq!(parsed.as_object().unwrap().len(), 0);
+    }
+}

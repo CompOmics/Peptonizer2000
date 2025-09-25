@@ -97,3 +97,75 @@ fn entropy(values: &[f64]) -> f64 {
         })
         .sum()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::taxa_clustering::generate_taxa_cluster_csv;
+
+    #[test]
+    fn test_entropy_uniform_distribution() {
+        let values = vec![1.0, 1.0, 1.0, 1.0];
+        let result = entropy(&values);
+        // Uniform distribution of 4 elements has entropy = log2(4) = 2.0
+        assert!((result - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_entropy_all_zero() {
+        let values = vec![0.0, 0.0, 0.0];
+        let result = entropy(&values);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_rbo_perfect_match() {
+        let list1 = vec![1, 2, 3, 4];
+        let list2 = vec![1, 2, 3, 4];
+        let result = rbo(&list1, &list2);
+        assert!((result - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_rbo_no_overlap() {
+        let list1 = vec![1, 2, 3];
+        let list2 = vec![4, 5, 6];
+        let result = rbo(&list1, &list2);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_compute_goodness_valid_inputs() {
+        // Prepare a small CSV with two taxa
+        let taxa = vec![
+            Taxon {
+                id: 0,
+                higher_taxa: 1,
+                scaled_weight: 0.5,
+                unique: true,
+                cluster_members: vec![1, 2],
+            },
+            Taxon {
+                id: 1,
+                higher_taxa: 2,
+                scaled_weight: 0.8,
+                unique: false,
+                cluster_members: vec![2, 3],
+            },
+        ];
+        let csv = generate_taxa_cluster_csv(taxa).unwrap();
+
+        // JSON scores
+        let json_scores = serde_json::json!({
+            "1": 0.9,
+            "2": 0.8
+        }).to_string();
+
+        let result = compute_goodness(csv, json_scores);
+        assert!(result.is_ok());
+        let score = result.unwrap();
+        assert!(score.is_finite());
+        assert!(score > 0.0);
+    }
+}

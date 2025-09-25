@@ -21,8 +21,8 @@ const TAXONOMY_ENDPOINT_BATCH_SIZE: usize = 100;
 
 /// Standard NCBI taxonomy ranks for lineage retrieval
 const NCBI_RANKS: &[&str] = &[
-    "superkingdom",
-    "kingdom",
+    "domain",
+    "realm",
     "subkingdom",
     "superphylum",
     "phylum",
@@ -326,4 +326,73 @@ pub fn get_names_for_taxa(target_taxa: &Vec<i32>) -> Result<HashMap<i32, String>
     }
 
     Ok(output)
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+    use serde_json::json;
+
+    #[test]
+    fn test_parse_response_json_string() {
+        let http_response = r#"
+        [
+            {"taxon_id": 1, "species_id": 9606, "genus_id": null, "name": "Homo sapiens"},
+            {"taxon_id": 2, "species_id": null, "genus_id": 9605, "name": "Pan troglodytes"}
+        ]
+        "#;
+
+        let parsed = parse_response_json_string(http_response);
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].get("taxon_id"), Some(&Some(1)));
+        assert_eq!(parsed[0].get("species_id"), Some(&Some(9606)));
+        assert_eq!(parsed[0].get("genus_id"), Some(&None));
+        assert!(parsed[0].get("name").is_none());
+        assert_eq!(parsed[1].get("taxon_id"), Some(&Some(2)));
+        assert_eq!(parsed[1].get("genus_id"), Some(&Some(9605)));
+    }
+
+    #[test]
+    fn test_get_unique_lineage_at_specified_rank_with_cache() {
+        let mut lineage_cache: HashMap<i32, Vec<Option<i32>>> = HashMap::new();
+        lineage_cache.insert(1, vec![Some(1), Some(10), Some(100)]);
+        lineage_cache.insert(2, vec![Some(2), Some(20), Some(200)]);
+
+        let target_taxa = vec![1, 2];
+        let rank = NCBI_RANKS[1];
+        let lineage = get_unique_lineage_at_specified_rank(&target_taxa, rank, &mut lineage_cache);
+
+        assert!(lineage.contains(&10));
+        assert!(lineage.contains(&20));
+        assert_eq!(lineage.len(), 2);
+    }
+
+    #[test]
+    fn test_get_descendants_for_taxa_structure() {
+        let descendants = get_descendants_for_taxa(vec![200, 701], "species".to_string());
+        assert!(descendants.len() == 4);
+    }
+
+    #[test]
+    fn test_get_names_for_taxa_structure() {
+        let taxa = vec![1, 2];
+        let result = get_names_for_taxa(&taxa);
+        assert!(result.is_ok());
+        
+        let names = result.unwrap();
+        assert_eq!(names.get(&1).unwrap(), "root");
+        assert_eq!(names.get(&2).unwrap(), "Bacteria");
+    }
+
+    #[test]
+    fn test_get_taxa_for_peptides_structure() {
+        let peptides = vec!["AAEEAAAA".to_string(), "AAAAEEA".to_string()];
+        let result = get_taxa_for_peptides(peptides);
+
+        assert_eq!(result.get("AAAAEEA").unwrap().len(), 2);
+    }
 }

@@ -6,7 +6,7 @@ use csv::{ReaderBuilder, WriterBuilder};
 
 
 /// Represents a taxonomic unit with attributes used for clustering.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Taxon {
     /// Unique identifier of the taxon.
     pub id: i32,
@@ -62,7 +62,7 @@ where
     D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(deserializer)?;
-    let vec = s.split(',')
+    let vec = s[1..(s.len()-1)].split(',')
                .filter_map(|item| item.trim().parse::<i32>().ok())
                .collect();
     Ok(vec)
@@ -228,7 +228,7 @@ fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<i32, HashSet<i3
             let sim: f32 = if set2.len() == 0 {
                 0.0
             } else {
-                (shared / set2.len()) as f32
+                shared as f32 / set2.len() as f32
             };
 
             sim_row.push(sim);
@@ -237,4 +237,70 @@ fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<i32, HashSet<i3
     }
 
     (sim_matrix, taxon_index)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn test_vec_to_string_and_string_to_vec() {
+        let values = vec![1, 2, 3];
+        let serialized = serde_json::to_string(&values).unwrap();
+        assert_eq!(serialized, "[1,2,3]");
+
+        let deserialized: Vec<i32> = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, values);
+    }
+
+    #[test]
+    fn test_parse_taxon_csv_and_generate_taxa_cluster_csv() {
+        let csv_data = "\
+id,higher_taxa,scaled_weight,unique
+1,10,0.5,true
+2,20,0.8,false
+";
+
+        let taxa = parse_taxon_csv(csv_data.to_string()).unwrap();
+        assert_eq!(taxa.len(), 2);
+        assert_eq!(taxa[0].id, 1);
+        assert_eq!(taxa[1].higher_taxa, 20);
+
+        let out_csv = generate_taxa_cluster_csv(taxa).unwrap();
+        assert!(out_csv.contains("id,higher_taxa,scaled_weight,unique,cluster_members"));
+        assert!(out_csv.contains("10"));
+    }
+
+    #[test]
+    fn test_compute_detected_peptidome_similarity() {
+        let mut peptidome_dict: HashMap<i32, HashSet<i32>> = HashMap::new();
+        peptidome_dict.insert(1, HashSet::from([1, 2]));
+        peptidome_dict.insert(2, HashSet::from([2, 3]));
+
+        let (sim_matrix, taxon_index) = compute_detected_peptidome_similarity(peptidome_dict);
+        println!("{:?}", sim_matrix);
+
+        assert_eq!(sim_matrix.len(), 2);
+        assert_eq!(sim_matrix[0].len(), 2);
+        assert!(taxon_index.contains_key(&1));
+        assert!(taxon_index.contains_key(&2));
+        assert!(sim_matrix[0][1] > 0.0);
+    }
+
+    #[test]
+    fn test_generate_taxa_cluster_csv_roundtrip() {
+        let taxa = vec![
+            Taxon { id: 1, higher_taxa: 10, scaled_weight: 0.5, unique: true, cluster_members: vec![10, 11] },
+            Taxon { id: 2, higher_taxa: 20, scaled_weight: 0.8, unique: false, cluster_members: vec![20] },
+        ];
+
+        let csv_string = generate_taxa_cluster_csv(taxa.clone()).unwrap();
+        let parsed = parse_taxon_csv(csv_string).unwrap();
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].cluster_members, vec![10, 11]);
+        assert_eq!(parsed[1].cluster_members, vec![20]);
+    }
 }

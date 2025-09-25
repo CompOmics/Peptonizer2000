@@ -78,3 +78,48 @@ pub fn log_normalize_2d(array: &mut Vec<[f64;2]>) {
 pub fn avoid_underflow(array: &mut Vec<f64>) {
     array.iter_mut().for_each(|x| if *x < 1e-30 { *x = 1e-30 });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_basic() {
+        let mut values = vec![1.0, 1.0, 2.0];
+        normalize(&mut values);
+        let sum: f64 = values.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_normalize_2d_basic() {
+        let mut values = vec![[1.0, 1.0], [2.0, 2.0]];
+        normalize_2d(&mut values);
+        let total: f64 = values.iter().map(|x| x[0] + x[1]).sum();
+        assert!((total - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_log_normalize_basic() {
+        let mut values = vec![0.0, 0.0];
+        log_normalize(&mut values);
+        let sum: f64 = values.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_log_normalize_2d_basic() {
+        let mut values = vec![[0.0, 0.0], [1.0, 1.0]];
+        log_normalize_2d(&mut values);
+        let total: f64 = values.iter().map(|x| x[0] + x[1]).sum();
+        assert!((total - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_avoid_underflow_replaces_small_values() {
+        let mut values = vec![1e-40, 1e-20];
+        avoid_underflow(&mut values);
+        assert!(values[0] >= 1e-30);
+        assert!(values[1] >= 1e-30);
+    }
+}

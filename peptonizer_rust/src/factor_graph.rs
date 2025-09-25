@@ -76,6 +76,20 @@ pub struct Edge {
 
 impl Edge {
 
+    /// Creates a new edge connecting two nodes in a factor graph.
+    ///
+    /// # Arguments
+    /// * `id` - Unique identifier for the edge.
+    /// * `node1_id` - ID of the first node connected by this edge.
+    /// * `node2_id` - ID of the second node connected by this edge.
+    /// * `message_length` - Optional message length associated with the edge. Can be `None` if not applicable.
+    ///
+    /// # Returns
+    /// An `Edge` instance representing a connection between the two specified nodes.
+    pub fn new(id: i32, node1_id: i32, node2_id: i32, message_length: Option<i32>) -> Edge {
+        Edge { id, node1_id, node2_id, message_length }
+    }
+
     /// Returns the ID of the edge.
     pub fn get_id(&self) -> i32 {
         self.id
@@ -109,6 +123,18 @@ pub struct CTFactorGraph {
 }
 
 impl CTFactorGraph {
+
+    /// Creates a new factor graph from a list of nodes and edges.
+    ///
+    /// # Arguments
+    /// * `nodes` - A vector of `Node` instances representing all nodes in the graph.
+    /// * `edges` - A vector of `Edge` instances representing all edges connecting the nodes.
+    ///
+    /// # Returns
+    /// A `CTFactorGraph` instance containing the provided nodes and edges.
+    pub fn new(nodes: Vec<Node>, edges: Vec<Edge>) -> CTFactorGraph {
+        CTFactorGraph { nodes, edges }
+    }
 
     /// Adds the names and categories of all nodes to the provided vectors.
     ///
@@ -633,5 +659,112 @@ impl CTFactorGraph {
                 self.find_component_rec(neighbor_id, component_ids, old_to_new_nodes, visited);                
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::{Node, NodeType, Factor};
+
+    fn sample_csv() -> String {
+        "id,sequence,score,psms,higher_taxa,weight,log_weight
+1,PEPTIDE1,0.8,5,100,0.5,-0.3
+2,PEPTIDE2,0.6,3,100,0.4,-0.5
+3,PEPTIDE3,0.9,7,200,0.7,-0.1"
+            .to_string()
+    }
+
+    #[test]
+    fn test_parse_taxon_weights_csv() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        assert_eq!(taxa.len(), 3);
+        assert_eq!(taxa[0].id, 1);
+        assert!((taxa[1].score - 0.6).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_generate_graph_creates_graphml() {
+        let csv = sample_csv();
+        let graphml = generate_graph(csv).unwrap();
+        assert!(graphml.contains("graphml"));
+        assert!(graphml.contains("node"));
+        assert!(graphml.contains("edge"));
+    }
+
+    #[test]
+    fn test_edge_getters() {
+        let edge = Edge { id: 1, node1_id: 10, node2_id: 20, message_length: Some(5) };
+        assert_eq!(edge.get_id(), 1);
+        assert_eq!(edge.get_node1_id(), 10);
+        assert_eq!(edge.get_node2_id(), 20);
+        assert_eq!(edge.get_node_ids(), (10, 20));
+        assert_eq!(edge.get_message_length(), Some(5));
+    }
+
+    #[test]
+    fn test_ctfactorgraph_from_taxa_weights() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        let graph = CTFactorGraph::from_taxa_weights(taxa);
+        assert!(graph.node_count() > 0);
+        assert!(graph.edge_count() > 0);
+    }
+
+    #[test]
+    fn test_ctfactorgraph_to_and_from_graphml() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        let graph = CTFactorGraph::from_taxa_weights(taxa);
+        let graphml = graph.to_graphml();
+        let parsed = CTFactorGraph::from_graphml(&graphml).unwrap();
+        assert_eq!(graph.node_count(), parsed.node_count());
+        assert_eq!(graph.edge_count(), parsed.edge_count());
+    }
+
+    #[test]
+    fn test_neighbor_operations() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        let graph = CTFactorGraph::from_taxa_weights(taxa);
+
+        if graph.node_count() > 1 {
+            let node = graph.get_node(0);
+            let neighbors = graph.get_neighbors(node);
+            for n in neighbors {
+                let idx = graph.get_neighbor_index(node, n);
+                assert!(idx >= 0);
+                let idx2 = graph.get_neighbor_index_from_id(node.get_id(), n);
+                assert_eq!(idx, idx2);
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_peptide_for_factor_returns_ok_or_err() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        let graph = CTFactorGraph::from_taxa_weights(taxa);
+
+        for (i, node) in graph.get_nodes().iter().enumerate() {
+            if node.is_factor_node() {
+                let result = graph.get_peptide_for_factor(i as i32);
+                assert!(result.is_ok() || result.is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn test_connected_components() {
+        let csv = sample_csv();
+        let taxa = parse_taxon_weights_csv(csv).unwrap();
+        let graph = CTFactorGraph::from_taxa_weights(taxa);
+
+        let components = graph.connected_components();
+        assert!(!components.is_empty());
+        let total_nodes: usize = components.iter().map(|c| c.node_count()).sum();
+        assert_eq!(total_nodes, graph.node_count());
     }
 }

@@ -210,3 +210,70 @@ fn fft_convolve(a: &Vec<f64>, b: &Vec<f64>) -> Vec<f64> {
 
     result_complex.iter().take(len).map(|c| c.re / fft_size as f64).collect()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ctnode_new_normalizes() {
+        let node = CTNode::new(vec![2.0, 2.0]);
+        assert!((node.joint_above[0] - 0.5).abs() < 1e-10);
+        assert!((node.joint_above[1] - 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_create_count_node_convolution() {
+        let lhs = CTNode::new(vec![1.0, 0.0]);
+        let rhs = CTNode::new(vec![0.0, 1.0]);
+        let node = CTNode::create_count_node(lhs, rhs);
+        assert_eq!(node.joint_above.len(), 3);
+        let sum: f64 = node.joint_above.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_message_up_and_messages_up() {
+        let mut node = CTNode::new(vec![0.5, 0.5]);
+        node.likelihood_below = Some(vec![0.5, 0.5]);
+        let sibling_joint = vec![0.5, 0.5];
+        let msg = node.message_up(2, &sibling_joint);
+        let sum: f64 = msg.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-10);
+
+        let msgs = node.messages_up();
+        assert_eq!(msgs, vec![0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_convolution_tree_message_to_variable() {
+        let shared = vec![0.5, 0.5];
+        let proteins = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let tree = ConvolutionTree::new(shared, proteins);
+
+        let msg = tree.message_to_variable(0);
+        assert!((msg.iter().sum::<f64>() - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_convolution_tree_message_to_shared_likelihood() {
+        let shared = vec![0.5, 0.5];
+        let proteins = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let tree = ConvolutionTree::new(shared.clone(), proteins);
+
+        let msg = tree.message_to_shared_likelihood();
+        assert_eq!(msg.len(), tree.n_proteins + 1);
+    }
+
+    #[test]
+    fn test_fft_convolve_basic() {
+        let a = vec![1.0, 2.0];
+        let b = vec![3.0, 4.0];
+        let result = fft_convolve(&a, &b);
+        let expected = vec![3.0, 10.0, 8.0];
+        for (r, e) in result.iter().zip(expected.iter()) {
+            assert!((r - e).abs() < 1e-8);
+        }
+    }
+}

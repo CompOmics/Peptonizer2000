@@ -332,3 +332,128 @@ impl Node {
         graphml
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minidom::Element;
+
+    fn dummy_factor_node(id: i32, parent_number: i32) -> Node {
+        Node::new(
+            id,
+            format!("factor_{}", id),
+            NodeType::FactorNode {
+                parent_number,
+                initial_belief: Factor { array: vec![], array_labels: vec![] },
+            },
+        )
+    }
+
+    #[test]
+    fn test_new_and_getters() {
+        let node = Node::new(1, "pep".into(), NodeType::PeptideNode { initial_belief_0: 0.3, initial_belief_1: 0.7 });
+        assert_eq!(node.get_id(), 1);
+        assert_eq!(node.get_name(), "pep");
+        assert_eq!(node.category(), "peptide");
+        assert!(!node.is_factor_node());
+        assert!(!node.is_taxon_node());
+    }
+
+    #[test]
+    fn test_copy_with_id() {
+        let node = Node::new(1, "a".into(), NodeType::TaxonNode { initial_belief_0: 0.0, initial_belief_1: 1.0 });
+        let copy = node.copy_with_id(42);
+        assert_eq!(copy.get_id(), 42);
+        assert_eq!(copy.get_name(), "a");
+    }
+
+    #[test]
+    fn test_new_convolution_node() {
+        let node = Node::new_convolution_node(10, "conv".into(), 3);
+        assert_eq!(node.get_id(), 10);
+        assert_eq!(node.category(), "convolution_tree");
+    }
+
+    #[test]
+    fn test_incident_edges() {
+        let mut node = Node::new(1, "test".into(), NodeType::TaxonNode { initial_belief_0: 0.1, initial_belief_1: 0.9 });
+        node.add_incident_edge(5);
+        assert_eq!(node.neighbors_count(), 1);
+        assert_eq!(node.get_incident_edge(0), 5);
+        assert_eq!(node.get_incident_edges(), &vec![5]);
+        node.set_incident_edges(vec![7, 8]);
+        assert_eq!(node.get_incident_edges(), &vec![7, 8]);
+    }
+
+    #[test]
+    fn test_set_and_get_subtype() {
+        let mut node = Node::new(1, "x".into(), NodeType::PeptideNode { initial_belief_0: 0.2, initial_belief_1: 0.8 });
+        node.set_subtype(NodeType::TaxonNode { initial_belief_0: 0.5, initial_belief_1: 0.5 });
+        assert!(matches!(node.get_subtype(), NodeType::TaxonNode { .. }));
+    }
+
+    #[test]
+    fn test_fill_in_prior() {
+        let mut node = Node::new(1, "tax".into(), NodeType::TaxonNode { initial_belief_0: 0.0, initial_belief_1: 0.0 });
+        node.fill_in_prior(0.8);
+        if let NodeType::TaxonNode { initial_belief_0, initial_belief_1 } = node.get_subtype() {
+            assert!((*initial_belief_0 - 0.2).abs() < 1e-9);
+            assert!((*initial_belief_1 - 0.8).abs() < 1e-9);
+        } else {
+            panic!("expected TaxonNode");
+        }
+    }
+
+    #[test]
+    fn test_fill_in_factor() {
+        let mut node = dummy_factor_node(2, 2);
+        node.fill_in_factor(0.5, 0.1, false);
+        if let NodeType::FactorNode { initial_belief, .. } = node.get_subtype() {
+            assert!(!initial_belief.array.is_empty());
+        } else {
+            panic!("expected FactorNode");
+        }
+    }
+
+    #[test]
+    fn test_normalize_cpd() {
+        let mut arr = vec![[2.0, 2.0], [1.0, 3.0]];
+        Node::normalize_cpd(&mut arr, 8.0, true);
+        for row in arr {
+            assert!(row[0] >= 1e-30);
+            assert!(row[1] >= 1e-30);
+            assert!((row[0] + row[1]) <= 1.0 + 1e-9);
+        }
+    }
+
+    #[test]
+    fn test_parse_data() {
+        let xml: &str = r#"<data xmlns="ns" key="d0">0.5</data>"#;
+        let elem: Element = xml.parse().unwrap();
+        let (k, v) = Node::parse_data(&elem);
+        assert_eq!(k, "d0");
+        assert_eq!(v, "0.5");
+    }
+
+    #[test]
+    fn test_parse_node_peptide() {
+        let xml: &str = r#"<node xmlns="ns" id="n1">
+            <data key="d2">peptide</data>
+            <data key="d0">0.1</data>
+            <data key="d1">0.9</data>
+        </node>"#;
+        let elem: Element = xml.parse().unwrap();
+        let node = Node::parse_node(&elem, 7).unwrap();
+        assert_eq!(node.get_id(), 7);
+        assert_eq!(node.category(), "peptide");
+    }
+
+    #[test]
+    fn test_to_graphml() {
+        let node = Node::new(1, "pepx".into(), NodeType::PeptideNode { initial_belief_0: 0.4, initial_belief_1: 0.6 });
+        let xml = node.to_graphml();
+        assert!(xml.contains("<node id=\"pepx\">"));
+        assert!(xml.contains("<data key=\"d2\">peptide</data>"));
+    }
+}

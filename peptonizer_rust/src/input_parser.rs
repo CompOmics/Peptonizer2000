@@ -96,3 +96,52 @@ pub fn parse_unique_peptides(tsv_content: String) -> Result<String, Box<dyn std:
 
     Ok(peptides_json)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_tsv() -> String {
+        "peptide\tscore\nPEP1\t0.5\nPEP2\t1.0\nPEP1\t0.8\n".to_string()
+    }
+
+    #[test]
+    fn test_parse_peptides_basic() {
+        let (scores, counts) = parse_peptides(sample_tsv()).unwrap();
+
+        assert_eq!(scores.len(), 2);
+        assert_eq!(counts.len(), 2);
+
+        // PEP1 appears twice, max score = 0.8
+        assert_eq!(counts.get("PEP1"), Some(&2));
+        assert!((scores.get("PEP1").unwrap() - 0.8).abs() < 1e-10);
+
+        // PEP2 appears once, score = 1.0
+        assert_eq!(counts.get("PEP2"), Some(&1));
+        assert!((scores.get("PEP2").unwrap() - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_input_peptides() {
+        let (scores_json, counts_json) = parse_input_peptides(sample_tsv()).unwrap();
+
+        let scores: HashMap<String, f64> = serde_json::from_str(&scores_json).unwrap();
+        let counts: HashMap<String, u32> = serde_json::from_str(&counts_json).unwrap();
+
+        assert_eq!(scores["PEP1"], 0.8);
+        assert_eq!(scores["PEP2"], 1.0);
+        assert_eq!(counts["PEP1"], 2);
+        assert_eq!(counts["PEP2"], 1);
+    }
+
+    #[test]
+    fn test_parse_unique_peptides() {
+        let peptides_json = parse_unique_peptides(sample_tsv()).unwrap();
+        let peptides: Vec<String> = serde_json::from_str(&peptides_json).unwrap();
+
+        assert_eq!(peptides.len(), 2);
+        assert!(peptides.contains(&"PEP1".to_string()));
+        assert!(peptides.contains(&"PEP2".to_string()));
+    }
+}

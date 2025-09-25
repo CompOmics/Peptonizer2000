@@ -49,7 +49,7 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
 
     // Build CSV output
     let mut lines: Vec<String> = Vec::new();
-    lines.push("taxon_name,taxon_id,score".to_string());
+    lines.push("taxon_name,id,score".to_string());
 
     for (id, score) in tax_ids {
         if let Some(name) = name_mapping.get(&id) {
@@ -58,4 +58,37 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
     }
 
     Ok(lines.join("\n"))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_clean_csv_basic() {
+        // CSV with two taxa and one non-taxon row
+        let csv_input = "1,0.5,taxon\n2,0.2,taxon\n3,0.9,other\n".to_string();
+
+        let result = clean_csv(csv_input).unwrap();
+        println!("{}", result);
+        let expected_lines: Vec<&str> = vec![
+            "taxon_name,id,score",
+            "Bacteria,2,0.2",
+            "root,1,0.5",
+        ];
+        for line in expected_lines {
+            assert!(result.contains(line));
+        }
+    }
+
+    #[test]
+    fn test_clean_csv_empty_input() {
+        let csv_input = "".to_string();
+        let result = clean_csv(csv_input);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("taxon_name,id,score"));
+    }
 }
