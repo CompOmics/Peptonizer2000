@@ -51,7 +51,6 @@ interface DedicatedWorkerGlobalScope {
 declare const self: DedicatedWorkerGlobalScope & typeof globalThis;
 
 async function loadPyodideAndPackages(): Promise<void> {
-    await init();
     self.pyodide = await loadPyodide({
         indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.3/full/'
     });
@@ -232,12 +231,13 @@ self.submitPepgmProgress = function(
     self.postMessage(resultMessage);
 }
 
-let pyodideReadyPromise: Promise<void> = loadPyodideAndPackages();
+// let pyodideReadyPromise: Promise<void> = loadPyodideAndPackages();
 
 self.onmessage = async (event: MessageEvent<InputEventData>): Promise<void> => {
     try {
         // Make sure loading is done
-        await pyodideReadyPromise;
+        // await pyodideReadyPromise;
+        await init();
 
         // Destructure the data from the event
         const eventData = event.data;
