@@ -146,13 +146,13 @@ impl Messages {
     ///
     /// # Returns
     /// Final node beliefs as a list of value vectors.
-    pub fn zero_lookahead_bp(&mut self, max_loops: i32, tolerance: f64) -> Vec<Vec<f64>> {
+    pub fn zero_lookahead_bp(&mut self, max_loops: i32, tolerance: f64) -> Result<Vec<Vec<f64>>, Box<dyn std::error::Error>> {
 
         let mut max_residual: f64 = f64::MAX;
 
         // first, do 5 loops where I update all messages
         for _ in 0..5 {
-            self.compute_update(false);
+            self.compute_update(false)?;
 
             let temp = mem::replace(&mut self.msg_in_log, mem::take(&mut self.msg_in));
             self.msg_in = mem::take(&mut self.msg_in_new);
@@ -176,7 +176,7 @@ impl Messages {
         while k < max_loops && max_residual > tolerance {
 
             // actual zero-look-ahead-BP part
-            let (&(end_id, start_in_end_id), &residual) = self.priorities.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap();
+            let (&(end_id, start_in_end_id), &residual) = self.priorities.iter().max_by(|a, b| a.1.partial_cmp(b.1).expect("Partial compare returned None")).ok_or("Priorities is empty")?;
             max_residual = residual;
             
             let end_node = self.graph.get_node(end_id);
@@ -184,7 +184,7 @@ impl Messages {
             
             let end_in_start_id = self.graph.get_neighbor_index_from_id(start_id, end_id);
             
-            self.single_message_update(start_id, end_id, end_in_start_id, None);
+            self.single_message_update(start_id, end_id, end_in_start_id, None)?;
 
             let priority_residual = self.compute_infinity_norm_residual(end_id as usize, start_in_end_id as usize);
             for node_id in prev_changed {
@@ -213,7 +213,7 @@ impl Messages {
             }
 
             self.compute_total_residuals(start_id, end_id, start_in_end_id, priority_residual);
-            self.compute_priority(start_id, end_id, start_in_end_id);
+            self.compute_priority(start_id, end_id, start_in_end_id)?;
 
             k += 1;
         }
@@ -252,22 +252,22 @@ impl Messages {
             }
         }
 
-        self.current_beliefs.iter().map(|b| b.values()).collect()
+        Ok(self.current_beliefs.iter().map(|b| b.values()).collect())
     }
 
     /// Updates all outgoing messages from all nodes.
     ///
     /// # Arguments
     /// * `local_loops` - If true, update only local region around last max residual.
-    fn compute_update(&mut self, local_loops: bool) {
+    fn compute_update(&mut self, local_loops: bool) -> Result<(), Box<dyn std::error::Error>> {
         let mut checked_cts: HashSet<i32> = HashSet::new();
         
         if self.max_val.is_some() && local_loops {
 
-            let (_, start_id) = self.max_val.unwrap();
+            let (_, start_id) = self.max_val.unwrap(); // Safe unwrap because of is_some() check
             let start_node = self.graph.get_node(start_id);
             for (end_in_start_id, end_id) in self.graph.get_neighbors(start_node).iter().enumerate() {
-                self.single_message_update(start_id, *end_id, end_in_start_id as i32, Some(&mut checked_cts));
+                self.single_message_update(start_id, *end_id, end_in_start_id as i32, Some(&mut checked_cts))?;
             }
 
         } else {
@@ -276,10 +276,12 @@ impl Messages {
                 let id = id as i32;
                 let start_node = self.graph.get_node(id);
                 for (end_in_start_id, end_id) in self.graph.get_neighbors(start_node).iter().enumerate() {
-                    self.single_message_update(id, *end_id, end_in_start_id as i32, Some(&mut checked_cts));
+                    self.single_message_update(id, *end_id, end_in_start_id as i32, Some(&mut checked_cts))?;
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Updates a single message along an edge.
@@ -289,7 +291,7 @@ impl Messages {
     /// * `end_id` - ID of destination node.
     /// * `end_in_start_id` - Neighbor index of destination in source.
     /// * `checked_cts` - Optional set of already updated convolution tree nodes.
-    fn single_message_update(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32, mut checked_cts: Option<&mut HashSet<i32>>) {
+    fn single_message_update(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32, mut checked_cts: Option<&mut HashSet<i32>>) -> Result<(), Box<dyn std::error::Error>> {
 
         let start_node: &Node = self.graph.get_node(start_id);
 
@@ -301,19 +303,21 @@ impl Messages {
                 self.msg_in_new[end_id as usize][start_in_end_id as usize] = new_message;
             },
             NodeType::FactorNode { .. } => {
-                let new_message = self.compute_out_message_factor(start_id, end_id, end_in_start_id);
+                let new_message = self.compute_out_message_factor(start_id, end_id, end_in_start_id)?;
                 let end_node: &Node = self.graph.get_node(end_id);
                 let start_in_end_id: i32 = self.graph.get_neighbor_index(end_node, start_id);
                 self.msg_in_new[end_id as usize][start_in_end_id as usize] = new_message;
             },
             NodeType::ConvolutionTreeNode { number_of_parents } => 
                 if checked_cts.as_ref().map_or(true, |set| ! set.contains(&start_id)) {
-                    self.compute_out_messages_ct_tree(start_id, *number_of_parents);
+                    self.compute_out_messages_ct_tree(start_id, *number_of_parents)?;
                     if let Some(set) = checked_cts.as_mut() {
                         set.insert(start_id);
                     }
                 }
         };
+
+        Ok(())
     }
 
     /// Computes outgoing message for variable (peptide/taxon) nodes.
@@ -374,11 +378,11 @@ impl Messages {
     /// 
     /// # Returns
     /// Normalized probability vector.
-    fn compute_out_message_factor(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32) -> Vec<f64> {
+    fn compute_out_message_factor(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
         let end_node = self.graph.get_node(end_id);
         let mut incoming_messages_end: Vec<Vec<f64>> = self.msg_in[start_id as usize].clone();
         incoming_messages_end.remove(end_in_start_id as usize);
-        let node_belief: Vec<[f64;2]> = self.current_beliefs[start_id as usize].factor_values().unwrap();
+        let node_belief: Vec<[f64;2]> = self.current_beliefs[start_id as usize].factor_values().ok_or("factor_values called on a NodeBelief which is not a FactorBelief")?;
 
         match end_node.get_subtype() {
             NodeType::ConvolutionTreeNode { .. } => {
@@ -393,7 +397,7 @@ impl Messages {
                 normalize_2d(&mut out_message);
                 let out_message_sum: Vec<f64> = out_message.iter().map(|[a, b]| a + b).collect();
 
-                return out_message_sum;
+                return Ok(out_message_sum);
             },
             _ => {
                 if incoming_messages_end[0].len() > 2 {
@@ -407,7 +411,7 @@ impl Messages {
                     // Prevent underflow: Replace zeros with 1e-30
                     avoid_underflow(&mut out_message_sum);
 
-                    return out_message_sum;
+                    return Ok(out_message_sum);
 
                 } else {
 
@@ -420,7 +424,7 @@ impl Messages {
                     normalize_2d(&mut out_message);
                     let out_message_sum: Vec<f64> = out_message.iter().map(|[a, b]| a + b).collect();
 
-                    return out_message_sum;
+                    return Ok(out_message_sum);
                 }
             }
         }
@@ -431,7 +435,7 @@ impl Messages {
     /// # Arguments
     /// * `start_id` - Node ID of convolution tree.
     /// * `number_of_parents` - Number of parent nodes.
-    fn compute_out_messages_ct_tree(&mut self, start_id: i32, number_of_parents: i32) {
+    fn compute_out_messages_ct_tree(&mut self, start_id: i32, number_of_parents: i32) -> Result<(), Box<dyn std::error::Error>> {
         let start_node = self.graph.get_node(start_id);
 
         let mut prot_prob_list: Vec<Vec<f64>> = Vec::new();
@@ -476,7 +480,7 @@ impl Messages {
 
         if old_shared_likelihoods != shared_likelihoods && 
             prot_prob_list.iter().zip(old_prot_prob_list.iter()).any(|(a, b)| a[0] != b[0]) {
-            let convolution_tree = ConvolutionTree::new(shared_likelihoods, prot_prob_list);
+            let convolution_tree = ConvolutionTree::new(shared_likelihoods, prot_prob_list)?;
 
             for (protein_id, protein) in prot_list.iter().enumerate() {
                 let node_neighbor_index: i32 = self.graph.get_neighbor_index_from_id(*protein, start_id);
@@ -487,7 +491,7 @@ impl Messages {
 
             for pep in peptides {
                 let node_neighbor_index: i32 = self.graph.get_neighbor_index_from_id(pep, start_id);
-                let mut new_message = convolution_tree.message_to_shared_likelihood();
+                let mut new_message = convolution_tree.message_to_shared_likelihood()?;
                 avoid_underflow(&mut new_message);
                 self.msg_in_new[pep as usize][node_neighbor_index as usize] = new_message;
             }
@@ -504,6 +508,8 @@ impl Messages {
                 self.msg_in_new[pep as usize][node_neighbor_index as usize] = self.msg_in[pep as usize][node_neighbor_index as usize].clone();
             }
         }
+
+        Ok(())
     }
 
     /// Computes infinity norm residual for an edge.
@@ -564,17 +570,17 @@ impl Messages {
     /// * `start_id` - ID of source node.
     /// * `end_id` - ID of destination node.
     /// * `end_in_start_id` - Neighbor index of destination in source.
-    fn compute_priority(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32) {
+    fn compute_priority(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32) -> Result<(), Box<dyn std::error::Error>> {
         let end_node = self.graph.get_node(end_id);
 
-        let priority = self.priorities.get_mut(&(end_id, start_in_end_id)).unwrap();
+        let priority = self.priorities.get_mut(&(end_id, start_in_end_id)).ok_or("Index out-of-bounds")?;
         *priority = 0.0;
 
         for (i, &neighbor_id) in self.graph.get_neighbors(end_node).iter().enumerate() {
             if neighbor_id != start_id {
                 let neighbor_node = self.graph.get_node(neighbor_id);
                 let end_in_neighbor_id: i32 = self.graph.get_neighbor_index(neighbor_node, end_id);
-                let priority = self.priorities.get_mut(&(neighbor_id, end_in_neighbor_id)).unwrap();
+                let priority = self.priorities.get_mut(&(neighbor_id, end_in_neighbor_id)).ok_or("Index out-of-bounds")?;
                 *priority = self.graph
                     .get_neighbors(end_node)
                     .iter()
@@ -588,6 +594,8 @@ impl Messages {
                     }).sum();
             }
         }
+
+        Ok(())
     }
 }
 
@@ -776,8 +784,8 @@ mod tests {
         let graph = create_minimal_graph();
         let mut messages = Messages::new(graph);
         let mut checked = HashSet::new();
-        messages.single_message_update(0,1,0,Some(&mut checked));
+        messages.single_message_update(0,1,0,Some(&mut checked)).unwrap();
         assert!(checked.is_empty() || checked.contains(&0)==false);
-        messages.compute_update(false); 
+        messages.compute_update(false).unwrap(); 
     }
 }

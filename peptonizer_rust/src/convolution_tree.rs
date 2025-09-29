@@ -83,7 +83,7 @@ impl ConvolutionTree {
     /// 
     /// # Returns
     /// A fully constructed ConvolutionTree with messages propagated backward.
-    pub fn new(n_to_shared_likelihoods: Vec<f64>, proteins: Vec<Vec<f64>>) -> Self {
+    pub fn new(n_to_shared_likelihoods: Vec<f64>, proteins: Vec<Vec<f64>>) -> Result<Self, Box<dyn std::error::Error>> {
         let log_length = (proteins.len() as f64).log2().ceil() as usize;
         let mut tree = ConvolutionTree {
             n_to_shared_likelihoods,
@@ -94,10 +94,10 @@ impl ConvolutionTree {
         };
 
         tree.build_first_layer(proteins);
-        tree.build_remaining_layers();
+        tree.build_remaining_layers()?;
         tree.propagate_backward();
 
-        tree
+        Ok(tree)
     }
 
     /// Builds the first layer of the tree from protein probability vectors.
@@ -118,9 +118,9 @@ impl ConvolutionTree {
 
     /// Builds all remaining layers of the tree by combining nodes into count nodes.
     /// Each layer is constructed by convolving pairs of nodes from the previous layer.
-    fn build_remaining_layers(&mut self) {
+    fn build_remaining_layers(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         for _ in 0..self.log_length {
-            let most_recent_layer = self.all_layers.last().unwrap();
+            let most_recent_layer = self.all_layers.last().ok_or("last() called on an empty vector")?;
             let mut new_layer = Vec::new();
 
             for i in (0..most_recent_layer.len()).step_by(2) {
@@ -134,7 +134,9 @@ impl ConvolutionTree {
 
         let mut likelihood_below = self.n_to_shared_likelihoods.clone();
         normalize(&mut likelihood_below);
-        self.all_layers.last_mut().unwrap()[0].likelihood_below = Some(likelihood_below);
+        self.all_layers.last_mut().ok_or("last() called on an empty vector")?[0].likelihood_below = Some(likelihood_below);
+
+        Ok(())
     }
 
     /// Propagates likelihood messages from the root down to the protein nodes.
@@ -173,10 +175,10 @@ impl ConvolutionTree {
     /// 
     /// # Returns
     /// A probability vector representing the message to the shared likelihood.
-    pub fn message_to_shared_likelihood(&self) -> Vec<f64> {
+    pub fn message_to_shared_likelihood(&self) -> Result<Vec<f64>, Box<dyn std::error::Error>>{
 
         // Extract the required range
-        self.all_layers.last().unwrap()[0].joint_above[..=self.n_proteins].to_vec()
+        Ok(self.all_layers.last().ok_or("last() called on an empty vector")?[0].joint_above[..=self.n_proteins].to_vec())
     }
 }
 

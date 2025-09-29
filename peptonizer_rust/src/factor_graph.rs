@@ -60,7 +60,7 @@ pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::e
 
     let graph = CTFactorGraph::from_taxa_weights(taxa_weights);
 
-    Ok(graph.to_graphml())
+    Ok(graph.to_graphml()?)
 }
 
 
@@ -190,9 +190,9 @@ impl CTFactorGraph {
         &self.edges
     }
 
-    fn parse_edge(edge: &Element) -> Result<(String, String), String> {
-        let source: String = edge.attr("source").unwrap().to_string();
-        let target: String = edge.attr("target").unwrap().to_string();
+    fn parse_edge(edge: &Element) -> Result<(String, String), Box<dyn std::error::Error>> {
+        let source: String = edge.attr("source").ok_or("Source attribute does not exist in Edge")?.to_string();
+        let target: String = edge.attr("target").ok_or("Target attribute does not exist in Edge")?.to_string();
     
         Ok((source, target))
     }
@@ -201,18 +201,18 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A `String` containing the GraphML XML representation of the factor graph.
-    pub fn to_graphml(&self) -> String {
+    pub fn to_graphml(&self) -> Result<String, Box<dyn std::error::Error>> {
 
         let mut graphml = String::new();
 
         writeln!(
             &mut graphml,
             r#"<?xml version="1.0" encoding="UTF-8"?>"#
-        ).unwrap();
+        )?;
         writeln!(
             &mut graphml,
             r#"<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">"#
-        ).unwrap();
+        )?;
 
         writeln!(
             &mut graphml,
@@ -220,12 +220,12 @@ impl CTFactorGraph {
   <key id="d2" for="node" attr.name="category" attr.type="string" />
   <key id="d1" for="node" attr.name="InitialBelief_1" attr.type="double" />
   <key id="d0" for="node" attr.name="InitialBelief_0" attr.type="double" />"#
-        ).unwrap();
+        )?;
 
-        writeln!(&mut graphml, r#"  <graph edgedefault="undirected">"#).unwrap();
+        writeln!(&mut graphml, r#"  <graph edgedefault="undirected">"#)?;
 
         for node in &self.nodes {
-            write!(&mut graphml, "{}", node.to_graphml()).unwrap();
+            write!(&mut graphml, "{}", node.to_graphml()?)?;
         }
 
         for edge in &self.edges {
@@ -237,13 +237,13 @@ impl CTFactorGraph {
                 r#"<edge source="{}" target="{}" />"#,
                 node1.get_name(),
                 node2.get_name()
-            ).unwrap();
+            )?;
         }
 
-        writeln!(&mut graphml, r#"  </graph>"#).unwrap();
-        writeln!(&mut graphml, r#"</graphml>"#).unwrap();
+        writeln!(&mut graphml, r#"  </graph>"#)?;
+        writeln!(&mut graphml, r#"</graphml>"#)?;
 
-        graphml
+        Ok(graphml)
     }
     
     /// Constructs a `CTFactorGraph` from a GraphML string.
@@ -256,18 +256,18 @@ impl CTFactorGraph {
     ///
     /// # Errors
     /// Returns an error if parsing the GraphML fails or if nodes/edges cannot be created correctly.
-    pub fn from_graphml(graphml_str: &str) -> Result<CTFactorGraph, String> {
+    pub fn from_graphml(graphml_str: &str) -> Result<CTFactorGraph, Box<dyn std::error::Error>> {
         let mut nodes: Vec<Node> = Vec::new();
         let mut edges: Vec<Edge> = Vec::new();
         let mut node_map: HashMap<String, i32> = HashMap::new();
     
-        let root: Element = graphml_str.parse().unwrap();
+        let root: Element = graphml_str.parse()?;
         
         let mut next_node_id = 0;
         let mut next_edge_id = 0;
         for graph_xml in root.children().filter(|n| n.name() == "graph") {
             for node_xml in graph_xml.children().filter(|n| n.name() == "node") {
-                let node: Node = Node::parse_node(node_xml, next_node_id).unwrap();
+                let node: Node = Node::parse_node(node_xml, next_node_id)?;
                 let node_name: String = node.get_name().to_string();
                 node_map.insert(node_name, next_node_id);
                 next_node_id += 1;
@@ -276,10 +276,10 @@ impl CTFactorGraph {
             }
     
             for edge_xml in graph_xml.children().filter(|n| n.name() == "edge") {
-                let (source, target) = Self::parse_edge(edge_xml).unwrap();
+                let (source, target) = Self::parse_edge(edge_xml)?;
     
-                let node1_id: i32 = *node_map.get(&source).unwrap();
-                let node2_id: i32 = *node_map.get(&target).unwrap();
+                let node1_id: i32 = *node_map.get(&source).ok_or("Source node of edge not present in graph")?;
+                let node2_id: i32 = *node_map.get(&target).ok_or("Target node of edge not present in graph")?;
                 let edge: Edge = Edge { id: next_edge_id, node1_id, node2_id, message_length: None };
                 next_edge_id += 1;
     
@@ -522,7 +522,7 @@ impl CTFactorGraph {
                     }
                 }
                 
-                // TODO: names necessary?
+                // TODO: names necessary? These nodes are added after graphml is created, because this is executed in execute_pepgm. The names are not contained in any output I think. For the algorithm itself, strings are inefficient
                 let new_node_name = format!("CTree {}", prot_names.join(" "));
                 let new_node_id = next_node_id;
                 let new_node = Node::new_convolution_node(new_node_id, new_node_name, prot_ids.len() as i32);

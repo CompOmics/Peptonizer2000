@@ -18,11 +18,11 @@ class TaxonGraph(nx.Graph):
 
     def create_from_taxa_weights(self, taxa_weights):
         # drop rows that have an entry in higher_taxa that appears only once
-        counts = taxa_weights["higher_taxa"].value_counts()
+        counts = taxa_weights["HigherTaxa"].value_counts()
         taxa_weights = taxa_weights[
-            taxa_weights["higher_taxa"].isin(counts[counts > 1].index)
+            taxa_weights["HigherTaxa"].isin(counts[counts > 1].index)
         ]
-        new_graph = nx.from_pandas_edgelist(taxa_weights, "sequence", "higher_taxa")
+        new_graph = nx.from_pandas_edgelist(taxa_weights, "sequence", "HigherTaxa")
         peptide_attributes = taxa_weights.apply(
             lambda row: (
                 row["sequence"],
@@ -35,7 +35,7 @@ class TaxonGraph(nx.Graph):
             axis=1,
         )
         taxa_attributes = taxa_weights.apply(
-            lambda row: (row["higher_taxa"], {"category": "taxon"}), axis=1
+            lambda row: (row["HigherTaxa"], {"category": "taxon"}), axis=1
         )
         intermediate_graph = nx.Graph()
         intermediate_graph.add_edges_from(new_graph.edges)
@@ -108,6 +108,7 @@ class CTFactorGraph(FactorGraph):
         """
         super().__init__()
 
+        # TODO: Graph types appears to be Taxons always. Can we leave out the other case?
         graph_types = ["Proteins", "Taxons"]
         if graph_type not in graph_types:
             raise ValueError("Invalid Graphtype. Expected one of: %s" % graph_types)
@@ -134,7 +135,6 @@ class CTFactorGraph(FactorGraph):
         list_of_prot_lists = []
         list_of_cts = []
         list_of_factors = []
-
         for node in self.nodes(data=True):
             # go through all factors with degree>2 and get their protein lists, then generate their conv. trees
             if node[1]["category"] == "factor" and self.degree[node[0]] > 2:

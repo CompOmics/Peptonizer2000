@@ -14,7 +14,7 @@ pub trait HttpClient {
     ///
     /// # Errors
     /// Returns an error string if the request fails or the response cannot be processed.
-    fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, String>;
+    fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, Box<dyn std::error::Error>>;
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -37,10 +37,10 @@ impl HttpClient for WasmHttpClient {
     ///
     /// # Errors
     /// Returns an error string if request setup, transmission, or response parsing fails.
-    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
+    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, Box<dyn std::error::Error>> {
         use web_sys::{XmlHttpRequest};
 
-        let payload_json = serde_json::to_string(payload).unwrap();
+        let payload_json = serde_json::to_string(payload)?;
 
         // Create a new XMLHttpRequest object
         let xhr = XmlHttpRequest::new().map_err(|e| format!("Failed to create XMLHttpRequest: {:?}", e))?;
@@ -66,7 +66,7 @@ impl HttpClient for WasmHttpClient {
             return Ok(format!("{}", response));
         }
 
-        Err(format!("Status code {}", status))
+        Err(format!("Status code {}", status).into())
     }
 }
 
@@ -84,12 +84,12 @@ impl HttpClient for PyHttpClient {
     ///
     /// # Errors
     /// Returns an error string if the request fails or the response cannot be processed.
-    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, String> {
+    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, Box<dyn std::error::Error>> {
         use reqwest::Client;
         use tokio::runtime::Runtime;
 
         // Create a Tokio runtime for async execution
-        let rt = Runtime::new().unwrap();
+        let rt = Runtime::new()?;
 
         // Execute the HTTP POST request within the runtime
         let result = rt.block_on(async {
@@ -106,7 +106,7 @@ impl HttpClient for PyHttpClient {
         // Handle the result and convert to PyResult
         match result {
             Ok(body) => Ok(body),
-            Err(e) => Err(format!("HTTP POST request failed: {}", e)),
+            Err(e) => Err(format!("HTTP POST request failed: {}", e).into()),
         }
     }
 }

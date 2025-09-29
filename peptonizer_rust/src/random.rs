@@ -23,7 +23,7 @@ use std::collections::HashSet;
 pub fn select_random_samples_with_weights(
     weights: Vec<f64>,
     n: usize,
-) -> HashSet<usize> {
+) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
 
     let cumulative_weights: Vec<f64> = weights
         .iter()
@@ -41,12 +41,12 @@ pub fn select_random_samples_with_weights(
             continue;
         }
 
-        let chosen_idx: usize = cumulative_weights.binary_search_by(|&w| w.partial_cmp(&r).unwrap()).unwrap_or_else(|x| x);
+        let chosen_idx: usize = cumulative_weights.binary_search_by(|&w| w.partial_cmp(&r).expect("Partial compare returned None")).unwrap_or_else(|x| x);
 
         samples.insert(chosen_idx);
     }
 
-    samples
+    Ok(samples)
 }
 
 /// Selects `n` unique random sample indices from a list of weights.
@@ -69,12 +69,12 @@ pub fn select_random_samples_with_weights(
 pub fn select_random_samples_with_weights(
     weights: Vec<f64>,
     n: usize,
-) -> HashSet<usize> {
+) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
     use rand::prelude::*;
     use rand::distributions::WeightedIndex;
 
     // Create a WeightedIndex for sampling
-    let dist = WeightedIndex::new(&weights).unwrap();
+    let dist = WeightedIndex::new(&weights)?;
 
     let mut rng = thread_rng();
     let mut selected_indices = HashSet::new();
@@ -84,7 +84,7 @@ pub fn select_random_samples_with_weights(
         selected_indices.insert(idx);
     }
 
-    selected_indices
+    Ok(selected_indices)
 }
 
 

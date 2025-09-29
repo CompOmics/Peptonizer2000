@@ -1,6 +1,5 @@
 use std::collections::{HashSet, HashMap};
 use crate::taxa_clustering::{Taxon, parse_taxon_csv};
-use crate::utils::log;
 
 
 /// Computes a "goodness" score for clustering results by combining
@@ -27,7 +26,7 @@ pub fn compute_goodness(
     let taxa_scores: HashMap<String, f64> = serde_json::from_str(&peptonizer_results)?;
     let mut taxa_scores: Vec<(&String, &f64)> = taxa_scores.iter().collect();
 
-    taxa_scores.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap()); // ascending order
+    taxa_scores.sort_by(|a, b| b.1.partial_cmp(a.1).expect("Partial compare returned None")); // ascending order
 
     let sorted_ids: Vec<i32> = taxa_scores.iter()
         .map(|(k, _)| (*k).clone().parse::<i32>())

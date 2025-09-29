@@ -40,7 +40,7 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
     }
 
     // Sort by score ascending
-    tax_ids.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    tax_ids.sort_by(|a, b| a.1.partial_cmp(&b.1).expect("Partial compare returned None"));
 
     // Collect all taxon IDs for name lookup
     let ids: Vec<i32> = tax_ids.iter().map(|(id, _)| *id).collect();

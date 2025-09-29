@@ -58,7 +58,7 @@ mod wasm {
         rank: String,
         taxon_query: String
     ) -> String {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
     }
 
     /// Represents the main pipeline for weighting taxa based on peptide evidence.
@@ -85,7 +85,7 @@ mod wasm {
         taxa_rank: String
     ) -> Box<[JsValue]> {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank);
+        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap();
         Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)])
     }
 
@@ -138,9 +138,9 @@ mod wasm {
         let max_iter: i32 = max_iter.unwrap_or(10000);
         let tol: f64 = tol.unwrap_or(0.006);
         
-        let csv: String = run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol);
+        let csv: String = run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap();
 
-        parse_taxon_scores(csv)
+        parse_taxon_scores(csv).unwrap()
     }
 
     /// Clusters taxa based on peptidome similarity and returns a CSV.
@@ -254,7 +254,7 @@ mod pyo3 {
         rank: String,
         taxon_query: String
     ) -> String {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
     }
 
     /// Represents the main pipeline for weighting taxa based on peptide evidence.
@@ -280,7 +280,7 @@ mod pyo3 {
         max_taxa: usize,
         taxa_rank: String
     ) -> (String, String) {
-        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank)
+        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap()
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
@@ -332,7 +332,7 @@ mod pyo3 {
         let max_iter: i32 = max_iter.unwrap_or(10000);
         let tol: f64 = tol.unwrap_or(0.006);
         
-        run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol)
+        run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap()
     }
 
     /// Clusters taxa based on peptidome similarity and returns a CSV.
@@ -374,7 +374,7 @@ mod pyo3 {
         clustered_taxa_weights_csv: String, 
         peptonizer_results_csv: String
     ) -> f64 {
-        let taxon_scores = parse_taxon_scores(peptonizer_results_csv.clone());
+        let taxon_scores = parse_taxon_scores(peptonizer_results_csv.clone()).unwrap();
         compute_goodness(clustered_taxa_weights_csv, taxon_scores).unwrap()
     }
 

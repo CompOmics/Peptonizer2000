@@ -89,7 +89,7 @@ pub fn parse_input_peptides(tsv_content: String) -> Result<(String, String), Box
 /// # Errors
 /// Returns an error if parsing fails or if JSON serialization fails.
 pub fn parse_unique_peptides(tsv_content: String) -> Result<String, Box<dyn std::error::Error>> {
-    let (peptides_scores, peptides_counts) = parse_peptides(tsv_content)?;
+    let (peptides_scores, _) = parse_peptides(tsv_content)?;
     
     let peptides: Vec<String> = peptides_scores.keys().cloned().collect();
     let peptides_json = serde_json::to_string(&peptides)?;

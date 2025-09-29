@@ -255,11 +255,11 @@ impl Node {
     ///
     /// # Returns
     /// A `(key, value)` pair.
-    fn parse_data(data: &Element) -> (String, String) {
-        let key = data.attr("key").unwrap().to_string();
+    fn parse_data(data: &Element) -> Result<(String, String), Box<dyn std::error::Error>> {
+        let key = data.attr("key").ok_or("key not found while parsing Node data")?.to_string();
         let value = data.text();
     
-        (key, value)
+        Ok((key, value))
     }
 
     /// Parses a GraphML `<node>` element into a `Node`.
@@ -270,26 +270,26 @@ impl Node {
     ///
     /// # Returns
     /// A new `Node` or error if subtype is unknown.
-    pub fn parse_node(node: &Element, id: i32) -> Result<Self, String> {
+    pub fn parse_node(node: &Element, id: i32) -> Result<Self, Box<dyn std::error::Error>> {
         // Process a node
-        let name = node.attr("id").unwrap().to_string();
+        let name = node.attr("id").ok_or("id not found while parsing Node")?.to_string();
     
         // Initialize data for this node
         let mut current_node_data = HashMap::new();
         for data in node.children().filter(|d| d.name() == "data") {
-            let (data_key, data_val) = Self::parse_data(data);
+            let (data_key, data_val) = Self::parse_data(data)?;
             current_node_data.insert(data_key, data_val);
         }
     
         let subtype: NodeType = match current_node_data.get("d2").map(String::as_str) {
             Some("factor") => {
-                let parent_number: i32 = current_node_data.get("d3").unwrap().parse().unwrap();
+                let parent_number: i32 = current_node_data.get("d3").ok_or("d3 not found while parsing factor Node")?.parse()?;
                 let initial_belief: Factor = Factor { array: Vec::new(), array_labels: Vec::new() };
                 NodeType::FactorNode { parent_number, initial_belief }
             }
             Some("peptide") => {
-                let initial_belief_0: f64 = current_node_data.get("d0").unwrap().parse().unwrap();
-                let initial_belief_1: f64 = current_node_data.get("d1").unwrap().parse().unwrap();
+                let initial_belief_0: f64 = current_node_data.get("d0").ok_or("d0 not found while parsing peptide Node")?.parse()?;
+                let initial_belief_1: f64 = current_node_data.get("d1").ok_or("d1 not found while parsing peptide Node")?.parse()?;
                 NodeType::PeptideNode { initial_belief_0, initial_belief_1 }
             }
             Some("taxon") => {
@@ -298,7 +298,7 @@ impl Node {
                 NodeType::TaxonNode { initial_belief_0, initial_belief_1 }
             }
             _ => {
-                return Err("Node data has unknown type".to_string());
+                return Err("Node data has unknown type".into());
             }
         };
 
@@ -309,27 +309,27 @@ impl Node {
     ///
     /// # Returns
     /// A GraphML representation of the node.
-    pub fn to_graphml(&self) -> String {
+    pub fn to_graphml(&self) -> Result<String, Box<dyn std::error::Error>> {
 
         let mut graphml = String::new();
 
-        writeln!(&mut graphml, r#"<node id="{}">"#, self.name).unwrap();
-        writeln!(&mut graphml, r#"<data key="d2">{}</data>"#, self.category()).unwrap();
+        writeln!(&mut graphml, r#"<node id="{}">"#, self.name)?;
+        writeln!(&mut graphml, r#"<data key="d2">{}</data>"#, self.category())?;
 
         match &self.subtype {
             NodeType::PeptideNode { initial_belief_0, initial_belief_1 } => {
-                writeln!(&mut graphml, r#"<data key="d0">{}</data>"#, initial_belief_0).unwrap();
-                writeln!(&mut graphml, r#"<data key="d1">{}</data>"#, initial_belief_1).unwrap();
+                writeln!(&mut graphml, r#"<data key="d0">{}</data>"#, initial_belief_0)?;
+                writeln!(&mut graphml, r#"<data key="d1">{}</data>"#, initial_belief_1)?;
             },
             NodeType::FactorNode { parent_number, initial_belief: _ } => {
-                writeln!(&mut graphml, r#"<data key="d3">{}</data>"#, parent_number).unwrap();
+                writeln!(&mut graphml, r#"<data key="d3">{}</data>"#, parent_number)?;
             },
             _ => {}
         }
 
-        writeln!(&mut graphml, r#"</node>"#).unwrap();
+        writeln!(&mut graphml, r#"</node>"#)?;
 
-        graphml
+        Ok(graphml)
     }
 }
 

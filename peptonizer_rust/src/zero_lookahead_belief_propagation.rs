@@ -25,7 +25,7 @@ fn calibrate_all_subgraphs(
     ct_factor_graphs: Vec<CTFactorGraph>,
     max_iterations: i32,
     tolerance: f64
-) -> (Vec<String>, Vec<String>, Vec<Vec<f64>>){
+) -> Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>), Box<dyn std::error::Error>>{
     let mut results: Vec<Vec<f64>> = Vec::new();
     let mut node_categories: Vec<String> = Vec::new();
     let mut node_names: Vec<String> = Vec::new();
@@ -39,13 +39,13 @@ fn calibrate_all_subgraphs(
             let beliefs: Vec<Vec<f64>> = messages.zero_lookahead_bp(
                 max_iterations,
                 tolerance
-            );
+            )?;
 
             results.extend(beliefs);
         }
     }
 
-    (node_names, node_categories, results)
+    Ok((node_names, node_categories, results))
 }
 
 
@@ -77,8 +77,8 @@ pub fn run_belief_propagation(
     prior: f64,
     max_iter: i32,
     tol: f64
-) -> String {
-    let mut ct_factor_graph = CTFactorGraph::from_graphml(&graph).unwrap();
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut ct_factor_graph = CTFactorGraph::from_graphml(&graph)?;
     ct_factor_graph.fill_in_factors(alpha, beta, regularized);
     ct_factor_graph.fill_in_priors(prior);
     ct_factor_graph.add_ct_nodes();
@@ -88,9 +88,9 @@ pub fn run_belief_propagation(
         ct_factor_graphs,
         max_iter,
         tol
-    );
+    )?;
 
-    generate_csv(node_names, node_types, results)
+    Ok(generate_csv(node_names, node_types, results)?)
 }
 
 
@@ -105,7 +105,7 @@ pub fn run_belief_propagation(
 /// # Returns
 ///
 /// CSV string with columns `[node_name, posterior_probability_1, node_category]`.
-fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<Vec<f64>>) -> String {
+fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<Vec<f64>>) -> Result<String, Box<dyn std::error::Error>> {
 
     let mut wtr = Writer::from_writer(vec![]);
 
@@ -114,12 +114,12 @@ fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<V
             node_names[i].clone(),
             results[i][1].to_string(),
             node_types[i].clone()
-        ]).unwrap();
+        ])?;
     }
 
-    let csv: String = String::from_utf8(wtr.into_inner().unwrap()).unwrap();
+    let csv: String = String::from_utf8(wtr.into_inner()?)?;
 
-    csv
+    Ok(csv)
 }
 
 
@@ -134,7 +134,7 @@ fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<V
 /// # Returns
 ///
 /// JSON string mapping taxon IDs (`i32`) to their posterior probabilities (`f64`), sorted by score.
-pub fn parse_taxon_scores(csv_content: String) -> String {
+pub fn parse_taxon_scores(csv_content: String) -> Result<String, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .from_reader(Cursor::new(csv_content));
@@ -143,27 +143,27 @@ pub fn parse_taxon_scores(csv_content: String) -> String {
     let mut records = Vec::new();
 
     for result in rdr.records() {
-        let record = result.unwrap();
+        let record = result?;
         
-        let record_type = record.get(2).unwrap();
+        let record_type = record.get(2).ok_or("Index 2 not in record")?;
         
         // Filter rows where "type" == "taxon"
         if record_type == "taxon" {
-            let id: i32 = record.get(0).unwrap().parse().unwrap();
-            let score: f64 = record.get(1).unwrap().parse().unwrap();
+            let id: i32 = record.get(0).ok_or("Index 0 not in record")?.parse()?;
+            let score: f64 = record.get(1).ok_or("Index 1 not in record")?.parse()?;
             records.push((id, score));
         }
     }
 
     // Sort by score in ascending order
-    records.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    records.sort_by(|a, b| a.1.partial_cmp(&b.1).expect("Partial compare returned None"));
 
     // Populate the HashMap with sorted values
     for (id, score) in records {
         taxon_score_dict.insert(id, score);
     }
 
-    serde_json::to_string(&taxon_score_dict).unwrap()
+    Ok(serde_json::to_string(&taxon_score_dict)?)
 }
 
 
