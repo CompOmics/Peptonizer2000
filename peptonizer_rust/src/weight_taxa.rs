@@ -12,7 +12,7 @@ use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
 /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
 /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
 /// * `max_taxa` - Maximum number of taxa to include in output.
-/// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
+/// * `taxa_rank` - NCBI rank at which the Peptonizer analysis should be performed. Should be a rank that is supported by Unipept.
 ///
 /// # Returns
 ///
@@ -35,9 +35,7 @@ pub fn perform_taxa_weighing(
     
     log("Started mapping all taxon ids to the specified rank...");
     normalize_unipept_responses(&mut taxa, &taxa_rank)?;
-    // TODO: enable sampling (disabled to get deterministic output)
-    // let chosen_idx: HashSet<usize> = weighted_random_sample(&taxa, 10000); // TODO: what if < 10000 or close to 10000 + hardcoded not a good idea
-    let chosen_idx: Vec<usize> = (0..taxa.len()).collect();
+    let chosen_idx: HashSet<usize> = weighted_random_sample(&taxa, 10000)?;
 
     log(&format!("Using {} sequences as input...", chosen_idx.len()));
 
@@ -209,6 +207,7 @@ fn generate_taxa_weights_csv(higher_taxa: Vec<i32>, higher_taxid_weights: Vec<f3
 /// * `taxa_rank` - The desired taxonomic rank to normalize to (e.g., "species").
 fn normalize_unipept_responses(taxa: &mut Vec<Vec<i32>>, taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
     
+    // TODO: should we first do get_lineages_for_taxa to limit Unipept calls (see python)?
     let mut lineage_cache: HashMap<i32, Vec<Option<i32>>> = HashMap::new();
 
     // Map all taxa onto the rank specified by the user

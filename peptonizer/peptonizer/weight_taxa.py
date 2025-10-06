@@ -134,8 +134,7 @@ def perform_taxa_weighing(
     """
     print("Started mapping all taxon ids to the specified rank...")
     peptide_taxa = normalize_taxa(peptide_taxa, taxa_rank, unipept_communicator)
-    # TODO: enable sampling: disabled to be deterministic
-    # peptide_taxa = weighted_random_sample(peptide_taxa, 10000)
+    peptide_taxa = weighted_random_sample(peptide_taxa, 10000)
     
     print(f"Using {len(peptide_taxa)} sequences as input...")
 
