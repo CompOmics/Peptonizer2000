@@ -5,7 +5,7 @@ mod utils;
 mod http_client;
 mod random;
 mod weight_taxa;
-mod zero_lookahead_belief_propagation;
+pub mod zero_lookahead_belief_propagation;
 mod node;
 mod factor_graph;
 mod messages;

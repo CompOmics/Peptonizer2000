@@ -106,7 +106,7 @@ pub fn perform_taxa_weighing(
 
     let higher_taxid_unique: Vec<bool> = tax_ids.iter().map(|id| higher_unique_psm_taxids.contains(&id)).collect();
 
-    // TODO: check if duplicate removal is necessary, example datasets do not contain doubles. Link to sampling. Lower the amount of sampled?
+    // TODO: Why hardcoded < 50
     let sequence_csv;
     if higher_taxid_weights.len() < 50 {
         sequence_csv = generate_sequence_csv(None, false, sequences, pep_scores, pep_psm_counts, higher_taxa, weights, log_weights)?;

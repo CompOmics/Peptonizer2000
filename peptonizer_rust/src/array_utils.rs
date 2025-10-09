@@ -1,4 +1,46 @@
 
+include!(concat!(env!("OUT_DIR"), "/log_table.rs"));
+
+const N: usize = 1024;
+const MIN_X: f64 = 1e-10;
+const MAX_X: f64 = 1.0;
+const STEP: f64 = (MAX_X - MIN_X) / (N as f64 - 1.0);
+
+#[inline(always)]
+pub fn ln_from_table(x: f64) -> f64 {
+    let idx = (((x - MIN_X) / STEP) as usize).min(N - 1);
+    LOG_TABLE[idx]
+}
+
+const UNDERFLOW_LIMIT: f64 = 1e-300;
+
+pub fn sum_logs_batched(rows: &Vec<Vec<f64>>) -> [f64; 2] {
+
+    let mut acc = [0.0f64; 2];
+    let mut prod = [1.0f64; 2];
+
+    for row in rows.iter() {
+        for j in 0..2 {
+            prod[j] *= row[j];
+            // if product becomes too small, take its log and reset
+            if prod[j] < UNDERFLOW_LIMIT {
+                acc[j] += prod[j].ln();
+                prod[j] = 1.0;
+            }
+        }
+    }
+
+    // handle any remaining partial products
+    for j in 0..2 {
+        if prod[j] != 1.0 {
+            acc[j] += prod[j].ln();
+        }
+    }
+
+    acc
+}
+
+
 /// Normalizes a vector of floating-point values so that the sum of all elements equals 1.
 /// 
 /// Mathematically: `x_i = x_i / Σx_j` for all elements `x_i` in the array.

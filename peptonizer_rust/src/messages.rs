@@ -4,7 +4,11 @@ use std::collections::{HashMap, HashSet};
 use std::mem;
 use crate::array_utils::*;
 use crate::convolution_tree::ConvolutionTree;
-
+use priority_queue::PriorityQueue;
+use ordered_float::OrderedFloat;
+use crate::array_utils::ln_from_table;
+use fast_math::log2;
+use crate::array_utils::sum_logs_batched;
 
 /// Represents belief values stored in different node types of the factor graph.
 #[derive(Debug, Clone)]
@@ -69,7 +73,7 @@ impl NodeBelief {
 pub struct Messages {
     graph: CTFactorGraph,
     max_val: Option<(i32, i32)>,
-    priorities: HashMap<(i32, i32), f64>,
+    priorities: PriorityQueue<(i32, i32), OrderedFloat<f64>>,
     // Keeps track of residuals for duos of directed edges, indexed by [end_node][id of start node in end neighbours][id of neighbour in end node]
     total_residuals: Vec<Vec<Vec<f64>>>, 
     // Maps a node ID onto its current belief value
@@ -93,7 +97,7 @@ impl Messages {
     pub fn new(ct_graph_in: CTFactorGraph) -> Messages {
         let max_val: Option<(i32, i32)> = None;
         
-        let priorities = HashMap::new();
+        let priorities = PriorityQueue::new();
 
         let mut total_residuals: Vec<Vec<Vec<f64>>> = Vec::with_capacity(ct_graph_in.node_count());
         for node in ct_graph_in.get_nodes() {
@@ -164,7 +168,9 @@ impl Messages {
             let node = self.graph.get_node(node_id as i32);
             for neighbor_id in 0..node.neighbors_count() {
                 let residual = self.compute_infinity_norm_residual(node_id, neighbor_id);
-                self.priorities.insert((node_id as i32, neighbor_id as i32), residual);
+                if residual > tolerance {
+                    self.priorities.push((node_id as i32, neighbor_id as i32), OrderedFloat(residual));
+                }
             }
         }
 
@@ -176,8 +182,8 @@ impl Messages {
         while k < max_loops && max_residual > tolerance {
 
             // actual zero-look-ahead-BP part
-            let (&(end_id, start_in_end_id), &residual) = self.priorities.iter().max_by(|a, b| a.1.partial_cmp(b.1).expect("Partial compare returned None")).ok_or("Priorities is empty")?;
-            max_residual = residual;
+            let (&(end_id, start_in_end_id), &residual) = self.priorities.peek().expect("Priorities is empty");
+            max_residual = residual.0;
             
             let end_node = self.graph.get_node(end_id);
             let start_id = self.graph.get_neighbor_node_id(end_node, start_in_end_id);
@@ -333,11 +339,10 @@ impl Messages {
         
         let start_node = self.graph.get_node(start_id);
         let end_node = self.graph.get_node(end_id);
-        let mut incoming_messages_end: Vec<Vec<f64>> = self.msg_in[start_id as usize].clone();
-        incoming_messages_end.remove(end_in_start_id as usize);
+
         let node_belief: Vec<f64> = self.current_beliefs[start_id as usize].values();
 
-        if incoming_messages_end.is_empty() {
+        if self.msg_in[start_id as usize].len() <= 1 {
             // TODO: check in Python code the idea of the any statement (ask Tanja)
             let start_in_end_id: i32 = self.graph.get_neighbor_index(end_node, start_id);
             if node_belief == get_initial_belief(start_node).values() { 
@@ -347,20 +352,11 @@ impl Messages {
             }
         }
 
-        // need for logs to prevent underflow in very large multiplications
-        let incoming_messages_end: Vec<Vec<f64>> = incoming_messages_end
-        .iter()
-        .map(|msg| msg.iter().map(|&x| x.ln()).collect())
-        .collect();
+        // Sum of incoming messages, need for logs to prevent underflow in very large multiplications
+        let sum_logs: Vec<f64> = sum_logs_batched(&self.msg_in[start_id as usize]).to_vec();
 
-        // Sum of incoming messages
-        let sum_logs: Vec<f64> = incoming_messages_end.iter().fold(vec![0.0;2], |mut acc,  row| {acc[0] += row[0]; acc[1] += row[1]; acc});
-
-        // Log transform node_belief
-        let node_belief_log: Vec<f64> = node_belief.iter().map(|&x| x.ln()).collect();
-
-        // Compute final log-normalized message
-        let mut out_message_log: Vec<f64> = node_belief_log.iter().zip(sum_logs.iter()).map(|(&a, &b)| a + b).collect();
+        // Compute final log-normalized message, Log transform node_belief
+        let mut out_message_log: Vec<f64> = node_belief.iter().zip(sum_logs.iter()).map(|(&a, &b)| a.ln() + b).collect();
         log_normalize(&mut out_message_log);
 
         // Prevent underflow: Replace zeros with 1e-30
@@ -448,9 +444,12 @@ impl Messages {
         let mut prot_list: Vec<i32> = Vec::new();
 
         let mut last_neighbor_id: Option<usize> = None;
-        for (neighbor_id_in_start, &neighbor_id) in self.graph.get_neighbors(start_node).iter().enumerate() {
-            let neighbor = self.graph.get_node(neighbor_id);
-            match neighbor.get_subtype() {
+
+        for (neighbor_id_in_start, &edge_id) in start_node.get_incident_edges().iter().enumerate() {
+            let (node1_id, node2_id) = self.graph.get_edge(edge_id).get_node_ids();
+            let neighbor_id: i32 = if node1_id == start_node.get_id() { node2_id } else { node1_id };
+            
+            match self.graph.get_node(neighbor_id).get_subtype() {
                 NodeType::FactorNode { .. } => {
                     peptides.push(neighbor_id);
                     
@@ -516,7 +515,7 @@ impl Messages {
     ///
     /// # Arguments
     /// * `end_id` - ID of destination node.
-    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// * `start_in_end_id` - Neighbor index of destination in source.
     /// 
     /// # Returns
     /// Residual as `f64`.
@@ -573,15 +572,13 @@ impl Messages {
     fn compute_priority(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32) -> Result<(), Box<dyn std::error::Error>> {
         let end_node = self.graph.get_node(end_id);
 
-        let priority = self.priorities.get_mut(&(end_id, start_in_end_id)).ok_or("Index out-of-bounds")?;
-        *priority = 0.0;
+        self.priorities.remove(&(end_id, start_in_end_id));
 
         for (i, &neighbor_id) in self.graph.get_neighbors(end_node).iter().enumerate() {
             if neighbor_id != start_id {
                 let neighbor_node = self.graph.get_node(neighbor_id);
                 let end_in_neighbor_id: i32 = self.graph.get_neighbor_index(neighbor_node, end_id);
-                let priority = self.priorities.get_mut(&(neighbor_id, end_in_neighbor_id)).ok_or("Index out-of-bounds")?;
-                *priority = self.graph
+                let priority: f64 = self.graph
                     .get_neighbors(end_node)
                     .iter()
                     .enumerate()
@@ -592,6 +589,10 @@ impl Messages {
                             0.0
                         }
                     }).sum();
+
+                if self.priorities.change_priority(&(neighbor_id, end_in_neighbor_id), OrderedFloat(priority)).is_none() {
+                    self.priorities.push((neighbor_id, end_in_neighbor_id), OrderedFloat(priority));
+                }
             }
         }
 
@@ -772,11 +773,11 @@ mod tests {
         let mut messages = Messages::new(graph);
         for node_id in 0..6 {
             for neighbor_id in 0..2 {
-                messages.priorities.insert((node_id, neighbor_id), 0.1);
+                messages.priorities.push((node_id, neighbor_id), 0.1);
             }
         }
         messages.compute_priority(0,2,0);
-        assert!(messages.priorities.get(&(1,0)).is_some());
+        assert!(messages.priorities.peek().is_some());
     }
 
     #[test]

@@ -455,7 +455,11 @@ impl CTFactorGraph {
     /// # Panics
     /// Panics if the neighbor is not connected to the node.
     pub fn get_neighbor_index(&self, node: &Node, neighbor_id: i32) -> i32 {
-        self.get_neighbors(node).iter().position(|id| *id == neighbor_id).expect(
+        node.get_incident_edges().iter().position(|edge_id| {
+            let (node1_id, node2_id) = self.edges[*edge_id as usize].get_node_ids();
+            let neighbor: i32 = if node1_id == node.get_id() { node2_id } else { node1_id };
+            neighbor == neighbor_id
+        }).expect(
             &format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node.get_id())
         ) as i32
     }
@@ -472,9 +476,7 @@ impl CTFactorGraph {
     /// # Panics
     /// Panics if the neighbor is not connected to the node.
     pub fn get_neighbor_index_from_id(&self, node_id: i32, neighbor_id: i32) -> i32 {
-        self.get_neighbors_from_id(node_id).iter().position(|id| *id == neighbor_id).expect(
-            &format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node_id)
-        ) as i32
+        self.get_neighbor_index(self.get_node(node_id), neighbor_id)
     }
 
     /// Returns the peptide node ID connected to a factor node.
