@@ -195,8 +195,7 @@ fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<
         if node.is_taxon_node() {
             let node_id: i32 = String::from(node.get_name()).parse()?;
             let neighbors: HashSet<i32> = graph.get_neighbors(node)
-                .iter()
-                .map(|&factor_id| graph.get_peptide_for_factor(factor_id))
+                .map(|factor_id| graph.get_peptide_for_factor(factor_id))
                 .collect::<Result<_, _>>()?;
             peptidome_dict.insert(node_id, neighbors);
         }

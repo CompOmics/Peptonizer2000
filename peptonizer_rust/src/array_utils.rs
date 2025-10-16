@@ -14,30 +14,44 @@ pub fn ln_from_table(x: f64) -> f64 {
 
 const UNDERFLOW_LIMIT: f64 = 1e-300;
 
-pub fn sum_logs_batched(rows: &Vec<Vec<f64>>) -> [f64; 2] {
+pub fn sum_logs_batched(rows: &Vec<[f64; 2]>) -> [f64; 2] {
 
-    let mut acc = [0.0f64; 2];
-    let mut prod = [1.0f64; 2];
+    let mut acc0 = 0.0f64;
+    let mut acc1 = 0.0f64;
+    let mut prod0 = 1.0f64;
+    let mut prod1 = 1.0f64;
 
     for row in rows.iter() {
-        for j in 0..2 {
-            prod[j] *= row[j];
-            // if product becomes too small, take its log and reset
-            if prod[j] < UNDERFLOW_LIMIT {
-                acc[j] += prod[j].ln();
-                prod[j] = 1.0;
-            }
+        prod0 *= row[0];
+        prod1 *= row[1];
+
+        // Use combined conditional check to reduce branch mispredictions
+        if prod0 < UNDERFLOW_LIMIT {
+            acc0 += prod0.ln();
+            prod0 = 1.0;
+        }
+        if prod1 < UNDERFLOW_LIMIT {
+            acc1 += prod1.ln();
+            prod1 = 1.0;
         }
     }
 
-    // handle any remaining partial products
-    for j in 0..2 {
-        if prod[j] != 1.0 {
-            acc[j] += prod[j].ln();
-        }
+    // Finish remaining batch
+    if prod0 != 1.0 {
+        acc0 += prod0.ln();
+    }
+    if prod1 != 1.0 {
+        acc1 += prod1.ln();
     }
 
-    acc
+    [acc0, acc1]
+}
+
+pub fn copy_without_index<T: Clone>(v: &Vec<T>, idx: usize) -> Vec<T> {
+    let mut out = Vec::with_capacity(v.len() - 1);
+    out.extend_from_slice(&v[..idx]);
+    out.extend_from_slice(&v[idx + 1..]);
+    out
 }
 
 
@@ -52,6 +66,12 @@ pub fn normalize(array: &mut Vec<f64>) {
     for val in array.iter_mut() {
         *val /= sum;
     }
+}
+
+pub fn normalize_arr(array: &mut [f64; 2]) {
+    let sum: f64 = array[0] + array[1];
+    array[0] /= sum;
+    array[1] /= sum;
 }
 
 
@@ -70,7 +90,7 @@ pub fn normalize_2d(array: &mut Vec<[f64; 2]>) {
 }
 
 
-/// Applies log-normalization to a vector using the log-sum-exp trick for stability.
+/// Applies log-normalization to a [f64; 2] using the log-sum-exp trick for stability.
 /// 
 /// Mathematically: `x_i = exp(x_i - log(Σ exp(x_j)))`
 /// 
@@ -79,12 +99,11 @@ pub fn normalize_2d(array: &mut Vec<[f64; 2]>) {
 /// 
 /// # Notes
 /// - Subtracts `max(x)` to prevent overflow.
-pub fn log_normalize(array: &mut Vec<f64>) {
-    let max_val = array.iter().cloned().fold(f64::NEG_INFINITY, f64::max); // Find the max value to prevent overflow
-    let log_sum_exp = array.iter().map(|&x| (x - max_val).exp()).sum::<f64>().ln(); // Calculate logsumexp
-
-    array.iter_mut()
-        .for_each(|x| *x = (*x - max_val - log_sum_exp).exp()); // Log-normalize and apply exp to each element
+pub fn log_normalize(array: &mut [f64; 2]) {
+    let max_val = array[0].max(array[1]);
+    let log_sum_exp = ((array[0] - max_val).exp() + (array[1] - max_val).exp()).ln();
+    array[0] = (array[0] - max_val - log_sum_exp).exp();
+    array[1] = (array[1] - max_val - log_sum_exp).exp();
 }
 
 
@@ -119,6 +138,14 @@ pub fn log_normalize_2d(array: &mut Vec<[f64;2]>) {
 /// * `array` - A mutable reference to a vector of `f64` values.
 pub fn avoid_underflow(array: &mut Vec<f64>) {
     array.iter_mut().for_each(|x| if *x < 1e-30 { *x = 1e-30 });
+}
+
+pub fn avoid_underflow_arr(array: &mut [f64; 2]) {
+    for i in 0..2 {
+        if array[i] < 1e-30 {
+            array[i] = 1e-30;
+        }
+    }
 }
 
 #[cfg(test)]

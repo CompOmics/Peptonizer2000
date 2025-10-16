@@ -163,6 +163,11 @@ impl Node {
         matches!(self.subtype, NodeType::TaxonNode { .. })
     }
 
+    /// Checks if the node is a convolution node.
+    pub fn is_convolution_tree_node(&self) -> bool {
+        matches!(self.subtype, NodeType::ConvolutionTreeNode { .. })
+    }
+
     /// Updates prior belief for taxon nodes.
     ///
     /// # Arguments

@@ -408,7 +408,7 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A vector of node IDs representing neighbors.
-    pub fn get_neighbors_from_id(&self, node_id: i32) -> Vec<i32> {
+    pub fn get_neighbors_from_id(&self, node_id: i32) -> impl Iterator<Item = i32> {
         self.get_neighbors(self.get_node(node_id))
     }
 
@@ -418,16 +418,12 @@ impl CTFactorGraph {
     /// * `node` - Reference to the `Node` whose neighbors are requested.
     ///
     /// # Returns
-    /// A vector of node IDs representing neighbors.
-    pub fn get_neighbors(&self, node: &Node) -> Vec<i32> {
-        let mut neighbors = Vec::with_capacity(node.neighbors_count() as usize);
-        for edge_id in node.get_incident_edges() {
-            let (node1_id, node2_id) = self.edges[*edge_id as usize].get_node_ids();
-            let neighbor: i32 = if node1_id == node.get_id() { node2_id } else { node1_id };
-            neighbors.push(neighbor);
-        }
-        
-        neighbors
+    /// A Iterator over node IDs representing neighbors.
+    pub fn get_neighbors(&self, node: &Node) -> impl Iterator<Item = i32> {
+        node.get_incident_edges().iter().map(|&edge_id| {
+            let (node1_id, node2_id) = self.edges[edge_id as usize].get_node_ids();
+            if node1_id == node.get_id() { node2_id } else { node1_id }
+        })
     }
 
     /// Returns the node ID of a neighbor given a node and its neighbor ID.
@@ -455,12 +451,8 @@ impl CTFactorGraph {
     /// # Panics
     /// Panics if the neighbor is not connected to the node.
     pub fn get_neighbor_index(&self, node: &Node, neighbor_id: i32) -> i32 {
-        node.get_incident_edges().iter().position(|edge_id| {
-            let (node1_id, node2_id) = self.edges[*edge_id as usize].get_node_ids();
-            let neighbor: i32 = if node1_id == node.get_id() { node2_id } else { node1_id };
-            neighbor == neighbor_id
-        }).expect(
-            &format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node.get_id())
+        self.get_neighbors(node).position(|neighbor| neighbor == neighbor_id)
+            .expect(&format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node.get_id())
         ) as i32
     }
 
@@ -490,8 +482,7 @@ impl CTFactorGraph {
     /// # Errors
     /// Returns an error if no peptide node is connected to the factor node.
     pub fn get_peptide_for_factor(&self, factor_id: i32) -> Result<i32, Box<dyn std::error::Error>> {
-        let neighbors = self.get_neighbors_from_id(factor_id);
-        for neighbor_id in neighbors {
+        for neighbor_id in self.get_neighbors_from_id(factor_id) {
             let neighbor = self.get_node(neighbor_id);
             if let NodeType::PeptideNode { .. } = neighbor.get_subtype() {
                 return Ok(neighbor.get_id());
@@ -545,9 +536,16 @@ impl CTFactorGraph {
             }
         }
 
-        // Remove edges
         let mut new_edges: Vec<Edge> = Vec::with_capacity(self.edges.len() + edges_to_add.len() - edges_to_remove.len());
         let mut next_edge_id = 0;
+        // Add new edges, make sure the Factor - CT edges are first
+        for edge in edges_to_add {
+            let mut new_edge = edge.clone();
+            new_edge.id = next_edge_id;
+            next_edge_id += 1;
+            new_edges.push(new_edge);
+        }
+        // Remove edges
         for edge in &self.edges {
             if ! edges_to_remove.contains(&(edge.node1_id, edge.node2_id)) {
                 let mut new_edge = edge.clone();
@@ -555,13 +553,6 @@ impl CTFactorGraph {
                 next_edge_id += 1;
                 new_edges.push(new_edge);
             }
-        }
-        // Add new edges
-        for edge in edges_to_add {
-            let mut new_edge = edge.clone();
-            new_edge.id = next_edge_id;
-            next_edge_id += 1;
-            new_edges.push(new_edge);
         }
 
         // Update the incident edges in the nodes
@@ -734,8 +725,7 @@ mod tests {
 
         if graph.node_count() > 1 {
             let node = graph.get_node(0);
-            let neighbors = graph.get_neighbors(node);
-            for n in neighbors {
+            for n in graph.get_neighbors(node) {
                 let idx = graph.get_neighbor_index(node, n);
                 assert!(idx >= 0);
                 let idx2 = graph.get_neighbor_index_from_id(node.get_id(), n);

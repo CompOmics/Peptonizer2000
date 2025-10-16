@@ -83,7 +83,7 @@ impl ConvolutionTree {
     /// 
     /// # Returns
     /// A fully constructed ConvolutionTree with messages propagated backward.
-    pub fn new(n_to_shared_likelihoods: Vec<f64>, proteins: Vec<Vec<f64>>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(n_to_shared_likelihoods: Vec<f64>, proteins: Vec<[f64; 2]>) -> Result<Self, Box<dyn std::error::Error>> {
         let log_length = (proteins.len() as f64).log2().ceil() as usize;
         let mut tree = ConvolutionTree {
             n_to_shared_likelihoods,
@@ -105,8 +105,8 @@ impl ConvolutionTree {
     /// 
     /// # Arguments
     /// * `proteins` - A vector of protein probability distributions.
-    fn build_first_layer(&mut self, proteins: Vec<Vec<f64>>) {
-        let mut layer = proteins.into_iter().map(CTNode::new).collect::<Vec<CTNode>>();
+    fn build_first_layer(&mut self, proteins: Vec<[f64; 2]>) {
+        let mut layer = proteins.into_iter().map(|arr| CTNode::new(arr.to_vec())).collect::<Vec<CTNode>>();
 
         // Pad with dummy nodes to make the length a power of 2
         while layer.len() < 2usize.pow(self.log_length as u32) {
