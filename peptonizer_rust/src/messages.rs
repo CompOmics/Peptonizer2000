@@ -6,9 +6,8 @@ use crate::array_utils::*;
 use crate::convolution_tree::ConvolutionTree;
 use priority_queue::PriorityQueue;
 use ordered_float::OrderedFloat;
-use crate::array_utils::ln_from_table;
 use fast_math::log2;
-use crate::array_utils::sum_logs_batched;
+use crate::array_utils::{sum_logs_batched, ln_from_table};
 
 /// Represents belief values stored in different node types of the factor graph.
 #[derive(Debug, Clone)]
@@ -309,10 +308,8 @@ impl Messages {
             max_residual = residual.0;
             
             let end_node = self.graph.get_node(end_id);
-            let start_id = self.graph.get_neighbor_node_id(end_node, start_in_end_id);
-            
-            let end_in_start_id = self.graph.get_neighbor_index_from_id(start_id, end_id);
-            
+            let (start_id, end_in_start_id) = self.graph.get_neighbor_node_and_neighbor_id(end_node, start_in_end_id);
+                        
             self.single_message_update(start_id, end_id, end_in_start_id, None)?;
 
             let priority_residual = self.compute_infinity_norm_residual(end_id as usize, start_in_end_id as usize);
@@ -415,12 +412,12 @@ impl Messages {
     fn single_message_update(&mut self, start_id: i32, end_id: i32, end_in_start_id: i32, mut checked_cts: Option<&mut HashSet<i32>>) -> Result<(), Box<dyn std::error::Error>> {
 
         let start_node: &Node = self.graph.get_node(start_id);
+        let (_, start_in_end_id): (i32, i32) = self.graph.get_neighbor_node_and_neighbor_id(start_node, end_in_start_id);
 
         match start_node.get_subtype() {
             NodeType::TaxonNode { .. } | NodeType::PeptideNode { .. } => {
                 let new_message = self.compute_out_message_variable(start_id, end_id, end_in_start_id);
                 let end_node: &Node = self.graph.get_node(end_id);
-                let start_in_end_id: i32 = self.graph.get_neighbor_index(end_node, start_id);
                 self.msg_in_new[end_id as usize].set_message(start_in_end_id as usize, new_message);
             },
             NodeType::FactorNode { .. } => {
@@ -429,8 +426,6 @@ impl Messages {
                     self.msg_in_new[end_id as usize].set_ct_message(new_message)?;
                 } else {
                     let new_message = self.compute_out_message_factor(start_id, end_id, end_in_start_id)?;
-                    let start_in_end_id: i32 = self.graph.get_neighbor_index(self.graph.get_node(end_id), start_id);
-                
                     self.msg_in_new[end_id as usize].set_message(start_in_end_id as usize, new_message);
                 }
             },
@@ -464,7 +459,7 @@ impl Messages {
 
         if self.msg_in[start_id as usize].get_message_count() <= 1 {
             // TODO: check in Python code the idea of the any statement (ask Tanja)
-            let start_in_end_id: i32 = self.graph.get_neighbor_index(end_node, start_id);
+            let (_, start_in_end_id): (i32, i32) = self.graph.get_neighbor_node_and_neighbor_id(start_node, end_in_start_id);
             if node_belief == get_initial_belief(start_node).variable_values().expect("Start node belief should be a TaxonBelief or PeptideBelief") { 
                 return node_belief; 
             } else { 
@@ -473,6 +468,7 @@ impl Messages {
         }
 
         // Sum of incoming messages, need for logs to prevent underflow in very large multiplications
+        // let sum_logs: [f64; 2] = self.msg_in[start_id as usize].get_messages().into_iter().fold([0.0; 2], |mut acc, row| {acc[0] += ln_from_table(row[0]); acc[1] += ln_from_table(row[1]); acc});
         let sum_logs: [f64; 2] = sum_logs_batched(self.msg_in[start_id as usize].get_messages());
 
         // Compute final log-normalized message, Log transform node_belief
@@ -548,8 +544,8 @@ impl Messages {
         let start_node = self.graph.get_node(start_id);
 
         let neighbor_list: Vec<i32> = self.graph.get_neighbors(start_node).collect();
-        let factor_id = neighbor_list[0];
         let prot_list: &[i32] = &neighbor_list[1..];
+        let (factor_id, start_id_in_factor) = self.graph.get_neighbor_node_and_neighbor_id(start_node, 0);
         
         let mut shared_likelihoods: Vec<f64> = self.msg_in[start_id as usize].get_ct_message()?.clone();
         let mut old_shared_likelihoods: Vec<f64> = shared_likelihoods.iter()
@@ -565,17 +561,13 @@ impl Messages {
             let convolution_tree = ConvolutionTree::new(shared_likelihoods, prot_prob_list.clone())?;
 
             for (protein_id, protein) in prot_list.iter().enumerate() {
-                let node_neighbor_index: i32 = self.graph.get_neighbor_index_from_id(*protein, start_id);
+                let (_, node_neighbor_index): (i32, i32) = self.graph.get_neighbor_node_and_neighbor_id(start_node, (protein_id+1) as i32);
                 let new_message = convolution_tree.message_to_variable(protein_id);
-                if new_message.len() != 2 {
-                    println!("Something is wrong 534");
-                }
                 let mut new_message = [new_message[0], new_message[1]];
                 avoid_underflow_arr(&mut new_message);
                 self.msg_in_new[*protein as usize].set_message(node_neighbor_index as usize, new_message);
             }
 
-            let start_id_in_factor: i32 = self.graph.get_neighbor_index_from_id(factor_id, start_id);
             let mut new_message = convolution_tree.message_to_shared_likelihood()?;
 
             avoid_underflow(&mut new_message);
@@ -583,12 +575,11 @@ impl Messages {
 
         } else {
             
-            for &protein in prot_list {
-                let node_neighbor_index: i32 = self.graph.get_neighbor_index_from_id(protein, start_id);
+            for (protein_id, &protein) in prot_list.iter().enumerate() {
+                let (_, node_neighbor_index): (i32, i32) = self.graph.get_neighbor_node_and_neighbor_id(start_node, (protein_id+1) as i32);
                 self.msg_in_new[protein as usize].set_message(node_neighbor_index as usize, self.msg_in[protein as usize].get_message(node_neighbor_index as usize).clone());
             }
 
-            let start_id_in_factor: i32 = self.graph.get_neighbor_index_from_id(factor_id, start_id);
             let ct_msg = self.msg_in[factor_id as usize].get_ct_message()?.clone();
             self.msg_in_new[factor_id as usize].set_ct_message(ct_msg)?;
         }
@@ -653,8 +644,7 @@ impl Messages {
     fn compute_total_residuals(&mut self, start_id: i32, end_id: i32, start_in_end_id: i32, current_residual: f64) {
         let start_node = self.graph.get_node(start_id);
         let end_node = self.graph.get_node(end_id);
-
-        let end_in_start_id: i32 = self.graph.get_neighbor_index(start_node, end_id);
+        let (_, end_in_start_id) = self.graph.get_neighbor_node_and_neighbor_id(end_node, start_in_end_id);
 
         for (i, neighbor_id) in self.graph.get_neighbors(start_node).enumerate() {
             if neighbor_id != end_id {
@@ -680,10 +670,10 @@ impl Messages {
 
         self.priorities.remove(&(end_id, start_in_end_id));
 
-        for (i, neighbor_id) in self.graph.get_neighbors(end_node).enumerate() {
+        for i in 0..end_node.neighbors_count() {
+            let (neighbor_id, end_in_neighbor_id) = self.graph.get_neighbor_node_and_neighbor_id(end_node, i as i32);
             if neighbor_id != start_id {
                 let neighbor_node = self.graph.get_node(neighbor_id);
-                let end_in_neighbor_id: i32 = self.graph.get_neighbor_index(neighbor_node, end_id);
                 let priority: f64 = self.graph
                     .get_neighbors(end_node)
                     .enumerate()

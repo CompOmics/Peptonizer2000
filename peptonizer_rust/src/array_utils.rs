@@ -12,39 +12,36 @@ pub fn ln_from_table(x: f64) -> f64 {
     LOG_TABLE[idx]
 }
 
-const UNDERFLOW_LIMIT: f64 = 1e-300;
-
 pub fn sum_logs_batched(rows: &Vec<[f64; 2]>) -> [f64; 2] {
 
     let mut acc0 = 0.0f64;
     let mut acc1 = 0.0f64;
-    let mut prod0 = 1.0f64;
-    let mut prod1 = 1.0f64;
 
-    for row in rows.iter() {
+    let block_size = 10;
+    let blocks = rows.len() / block_size;
+
+    for i in 0..blocks {
+        let start = i * block_size;
+        let mut prod0 = 1.0f64;
+        let mut prod1 = 1.0f64;
+        for &row in &rows[start..(start+block_size)] {
+            prod0 *= row[0];
+            prod1 *= row[1];
+        }
+
+        acc0 += ln_from_table(prod0);
+        acc1 += ln_from_table(prod1);
+    }
+
+    let rem_start = blocks * block_size;
+    let mut prod0 = 1.0;
+    let mut prod1 = 1.0;
+    for &row in &rows[rem_start..] {
         prod0 *= row[0];
         prod1 *= row[1];
-
-        // Use combined conditional check to reduce branch mispredictions
-        if prod0 < UNDERFLOW_LIMIT {
-            acc0 += prod0.ln();
-            prod0 = 1.0;
-        }
-        if prod1 < UNDERFLOW_LIMIT {
-            acc1 += prod1.ln();
-            prod1 = 1.0;
-        }
     }
 
-    // Finish remaining batch
-    if prod0 != 1.0 {
-        acc0 += prod0.ln();
-    }
-    if prod1 != 1.0 {
-        acc1 += prod1.ln();
-    }
-
-    [acc0, acc1]
+    [acc0 + prod0.ln(), acc1 + prod1.ln()]
 }
 
 pub fn copy_without_index<T: Clone>(v: &Vec<T>, idx: usize) -> Vec<T> {

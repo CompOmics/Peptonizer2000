@@ -70,6 +70,8 @@ pub struct Edge {
     id: i32,
     node1_id: i32,
     node2_id: i32,
+    node1_in_node2_id: i32,
+    node2_in_node1_id: i32,
     message_length: Option<i32>
 }
 
@@ -86,8 +88,17 @@ impl Edge {
     ///
     /// # Returns
     /// An `Edge` instance representing a connection between the two specified nodes.
-    pub fn new(id: i32, node1_id: i32, node2_id: i32, message_length: Option<i32>) -> Edge {
-        Edge { id, node1_id, node2_id, message_length }
+    pub fn new(id: i32, node1_id: i32, node2_id: i32, node1_in_node2_id: i32, node2_in_node1_id: i32, message_length: Option<i32>) -> Edge {
+        Edge { id, node1_id, node2_id, node1_in_node2_id, node2_in_node1_id, message_length }
+    }
+
+
+    pub fn set_node1_in_node2_id(&mut self, id: i32) {
+        self.node1_in_node2_id = id;
+    }
+
+    pub fn set_node2_in_node1_id(&mut self, id: i32) {
+        self.node2_in_node1_id = id;
     }
 
     /// Returns the ID of the edge.
@@ -108,6 +119,10 @@ impl Edge {
     /// Returns a tuple of the two node IDs of the edge.
     pub fn get_node_ids(&self) -> (i32, i32) {
         (self.node1_id, self.node2_id)
+    }
+
+    pub fn get_node_and_neighbor_ids(&self) -> ((i32, i32), (i32, i32)) {
+        ((self.node1_id, self.node1_in_node2_id), (self.node2_id, self.node2_in_node1_id))
     }
 
     /// Returns the message length associated with the edge.
@@ -280,7 +295,9 @@ impl CTFactorGraph {
     
                 let node1_id: i32 = *node_map.get(&source).ok_or("Source node of edge not present in graph")?;
                 let node2_id: i32 = *node_map.get(&target).ok_or("Target node of edge not present in graph")?;
-                let edge: Edge = Edge { id: next_edge_id, node1_id, node2_id, message_length: None };
+                let node1: &Node = &nodes[node1_id as usize];
+                let node2: &Node = &nodes[node2_id as usize];
+                let edge: Edge = Edge { id: next_edge_id, node1_id, node2_id, node1_in_node2_id: node2.neighbors_count() as i32, node2_in_node1_id: node1.neighbors_count() as i32, message_length: None };
                 next_edge_id += 1;
     
                 let node1: &mut Node = &mut nodes[node1_id as usize];
@@ -338,7 +355,7 @@ impl CTFactorGraph {
                 node_name_to_id.insert(cpd_name.clone(), node2_id);
                 node_id_counter += 1;
 
-                let edge = Edge { id: edge_id_counter, node1_id, node2_id, message_length: None };
+                let edge = Edge { id: edge_id_counter, node1_id, node2_id, node1_in_node2_id: nodes[node2_id as usize].neighbors_count() as i32, node2_in_node1_id: nodes[node1_id as usize].neighbors_count() as i32, message_length: None };
                 edges.push(edge);
                 nodes[node1_id as usize].add_incident_edge(edge_id_counter);
                 nodes[node2_id as usize].add_incident_edge(edge_id_counter);
@@ -359,7 +376,7 @@ impl CTFactorGraph {
             // Add edge
             let node1_id = node_name_to_id[&higher_taxa_str];
             let node2_id = node_name_to_id[&cpd_name];
-            let edge = Edge { id: edge_id_counter, node1_id, node2_id, message_length: None };
+            let edge = Edge { id: edge_id_counter, node1_id, node2_id, node1_in_node2_id: nodes[node2_id as usize].neighbors_count() as i32, node2_in_node1_id: nodes[node1_id as usize].neighbors_count() as i32, message_length: None };
             edges.push(edge);
             nodes[node1_id as usize].add_incident_edge(edge_id_counter);
             nodes[node2_id as usize].add_incident_edge(edge_id_counter);
@@ -439,36 +456,9 @@ impl CTFactorGraph {
         if node1_id == node.get_id() { node2_id } else { node1_id }
     }
 
-    /// Returns the index of a neighbor in a node's neighbor list.
-    ///
-    /// # Arguments
-    /// * `node` - Reference to the node.
-    /// * `neighbor_id` - ID of the neighbor.
-    ///
-    /// # Returns
-    /// Index position of the neighbor in the node's neighbor list.
-    ///
-    /// # Panics
-    /// Panics if the neighbor is not connected to the node.
-    pub fn get_neighbor_index(&self, node: &Node, neighbor_id: i32) -> i32 {
-        self.get_neighbors(node).position(|neighbor| neighbor == neighbor_id)
-            .expect(&format!("Node with id {} is not a neighbor of node with id {}", neighbor_id, node.get_id())
-        ) as i32
-    }
-
-    /// Returns the index of a neighbor from node ID and neighbor ID.
-    ///
-    /// # Arguments
-    /// * `node_id` - ID of the node.
-    /// * `neighbor_id` - ID of the neighbor.
-    ///
-    /// # Returns
-    /// Index position of the neighbor in the node's neighbor list.
-    ///
-    /// # Panics
-    /// Panics if the neighbor is not connected to the node.
-    pub fn get_neighbor_index_from_id(&self, node_id: i32, neighbor_id: i32) -> i32 {
-        self.get_neighbor_index(self.get_node(node_id), neighbor_id)
+    pub fn get_neighbor_node_and_neighbor_id(&self, node: &Node, neighbor_id: i32) -> (i32, i32) {
+        let ((node1_id, node1_in_node2_id), (node2_id, node2_in_node1_id)) = self.edges[node.get_incident_edge(neighbor_id) as usize].get_node_and_neighbor_ids();
+        if node1_id == node.get_id() { (node2_id, node1_in_node2_id) } else { (node1_id, node2_in_node1_id) }
     }
 
     /// Returns the peptide node ID connected to a factor node.
@@ -522,11 +512,13 @@ impl CTFactorGraph {
                 next_node_id += 1;
                 nodes_to_add.push(new_node);
 
-                let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: node.get_id(), message_length: Some(prot_ids.len() as i32 + 1) };
+                // Create edge, set node_in_node_id's to 0, we will set them correctly later
+                let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: node.get_id(), node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: Some(prot_ids.len() as i32 + 1) };
                 next_edge_id += 1;
                 edges_to_add.push(edge);
                 for neighbor_id in prot_ids {
-                    let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: neighbor_id, message_length: None };
+                    // Create edge, set node_in_node_id's to 0, we will set them correctly later
+                    let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: neighbor_id, node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: None };
                     next_edge_id += 1;
                     edges_to_add.push(edge);
                     edges_to_remove.insert((node.get_id(), neighbor_id));
@@ -564,8 +556,10 @@ impl CTFactorGraph {
             new_nodes.push(node);
         }
         
-        for edge in &new_edges {
+        for edge in &mut new_edges {
             let (node1_id, node2_id) = edge.get_node_ids();
+            edge.set_node1_in_node2_id(new_nodes[node2_id as usize].neighbors_count() as i32);
+            edge.set_node2_in_node1_id(new_nodes[node1_id as usize].neighbors_count() as i32);
             new_nodes[node1_id as usize].add_incident_edge(edge.get_id());
             new_nodes[node2_id as usize].add_incident_edge(edge.get_id());
         }
@@ -607,11 +601,11 @@ impl CTFactorGraph {
                 let mut old_to_new_edges: HashMap<i32, i32> = HashMap::new();
                 for edge in &self.edges {
 
-                    let (source, target): (i32, i32) = edge.get_node_ids();
+                    let ((source, source_in_target), (target, target_in_source)): ((i32, i32), (i32, i32)) = edge.get_node_and_neighbor_ids();
                     if component_ids.contains(&source) && component_ids.contains(&target) {
 
                         let (new_source, new_target): (i32, i32) = (old_to_new_nodes[&source], old_to_new_nodes[&target]);
-                        let new_edge = Edge { id: next_edge_id, node1_id: new_source, node2_id: new_target, message_length: edge.get_message_length() };
+                        let new_edge = Edge { id: next_edge_id, node1_id: new_source, node2_id: new_target, node1_in_node2_id: source_in_target, node2_in_node1_id: target_in_source, message_length: edge.get_message_length() };
                         next_edge_id += 1;
 
                         component_edge_ids.insert(edge.get_id());
