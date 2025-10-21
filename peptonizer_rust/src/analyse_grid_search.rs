@@ -21,15 +21,15 @@ pub fn compute_goodness(
 ) -> Result<f64, Box<dyn std::error::Error>> {
 
     let taxid_weights: Vec<Taxon> = parse_taxon_csv(clustered_taxa_weights_csv)?;
-    let higher_taxa: Vec<i32> = taxid_weights.iter().map(|t| t.higher_taxa).collect();
+    let higher_taxa: Vec<usize> = taxid_weights.iter().map(|t| t.higher_taxa).collect();
 
     let taxa_scores: HashMap<String, f64> = serde_json::from_str(&peptonizer_results)?;
     let mut taxa_scores: Vec<(&String, &f64)> = taxa_scores.iter().collect();
 
     taxa_scores.sort_by(|a, b| b.1.partial_cmp(a.1).expect("Partial compare returned None")); // ascending order
 
-    let sorted_ids: Vec<i32> = taxa_scores.iter()
-        .map(|(k, _)| (*k).clone().parse::<i32>())
+    let sorted_ids: Vec<usize> = taxa_scores.iter()
+        .map(|(k, _)| (*k).clone().parse::<usize>())
         .collect::<Result<Vec<_>, _>>()?;
     let sorted_scores: Vec<f64> = taxa_scores.iter().map(|(_, v)| **v).collect::<Vec<_>>();
 
@@ -49,7 +49,7 @@ pub fn compute_goodness(
 /// 
 /// # Returns
 /// A value between 0.0 and 1.0 representing the similarity of the two ranked lists.
-fn rbo(list1: &[i32], list2: &[i32]) -> f64 {
+fn rbo(list1: &[usize], list2: &[usize]) -> f64 {
     let k = list1.len().min(list2.len());
     let mut sum = 0.0;
 

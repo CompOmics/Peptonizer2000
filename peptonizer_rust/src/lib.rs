@@ -131,11 +131,11 @@ mod wasm {
         beta: f64,
         regularized: bool,
         prior: f64,
-        max_iter: Option<i32>,
+        max_iter: Option<u32>,
         tol: Option<f64>
     ) -> String {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let max_iter: i32 = max_iter.unwrap_or(10000);
+        let max_iter: u32 = max_iter.unwrap_or(10000);
         let tol: f64 = tol.unwrap_or(0.006);
         
         let csv: String = run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap();
@@ -325,11 +325,11 @@ mod pyo3 {
         beta: f64,
         regularized: bool,
         prior: f64,
-        max_iter: Option<i32>,
+        max_iter: Option<u32>,
         tol: Option<f64>
     ) -> String {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let max_iter: i32 = max_iter.unwrap_or(10000);
+        let max_iter: u32 = max_iter.unwrap_or(10000);
         let tol: f64 = tol.unwrap_or(0.006);
         
         run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap()
@@ -390,7 +390,7 @@ mod pyo3 {
     /// # Returns
     /// A JSON string mapping taxon IDs to their corresponding taxon names.
     #[pyfunction]
-    pub fn get_names_for_taxa_py(target_taxa: Vec<i32>) -> String {
+    pub fn get_names_for_taxa_py(target_taxa: Vec<usize>) -> String {
         let names = get_names_for_taxa(&target_taxa).unwrap();
         serde_json::to_string(&names).unwrap()
     }

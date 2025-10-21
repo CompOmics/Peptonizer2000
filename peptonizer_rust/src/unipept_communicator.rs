@@ -54,7 +54,7 @@ const NCBI_RANKS: &[&str] = &[
 /// Payload structure for requesting taxonomy lineages from UniPept
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyPayload {
-    input: Vec<i32>,
+    input: Vec<usize>,
     extra: bool
 }
 
@@ -70,13 +70,13 @@ pub struct HTTPPept2TaxaPayload {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPPept2TaxaResponse {
     peptide: String,
-    taxa: Vec<i32>
+    taxa: Vec<usize>
 }
 
 /// Payload structure for retrieving descendants of taxa at specified ranks
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsPayload {
-    input: Vec<i32>,
+    input: Vec<usize>,
     descendants: bool,
     descendants_ranks: Vec<String>
 }
@@ -84,16 +84,16 @@ pub struct HTTPTaxonomyDescendantsPayload {
 /// Response structure for retrieving descendants of a taxon
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsResponse {
-    taxon_id: i32,
+    taxon_id: usize,
     taxon_name: String,
     taxon_rank: String,
-    descendants: Vec<i32>
+    descendants: Vec<usize>
 }
 
 /// Represents a response from the UniPept taxonomy API
 #[derive(Serialize, Deserialize, Debug)]
 struct TaxonomyResponse {
-    taxon_id: i32,
+    taxon_id: usize,
     taxon_name: String,
 }
 
@@ -104,19 +104,19 @@ struct TaxonomyResponse {
 /// * `http_response` - JSON string from UniPept API
 ///
 /// # Returns
-/// Vector of hash maps, where each key maps to an `Option<i32>` value. Only numeric or null values are retained.
-fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String, Option<i32>>>, Box<dyn std::error::Error>> {
-    let http_response_map: Vec<HashMap<String, Option<i32>>> = serde_json::from_str::<Vec<HashMap<String, Value>>>(http_response)?
+/// Vector of hash maps, where each key maps to an `Option<usize>` value. Only numeric or null values are retained.
+fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String, Option<usize>>>, Box<dyn std::error::Error>> {
+    let http_response_map: Vec<HashMap<String, Option<usize>>> = serde_json::from_str::<Vec<HashMap<String, Value>>>(http_response)?
             .into_iter()
             .map(|mut obj: HashMap<String, Value>| {
                 // Remove the key-value pair where the value is a string
                 obj.retain(|_, v| v.is_null() || v.is_number());
 
-                // Convert the remaining keys and values to `HashMap<String, Option<i32>>`
+                // Convert the remaining keys and values to `HashMap<String, Option<usize>>`
                 obj.into_iter()
                     .map(|(key, value)| {
                         let value = if value.is_number() {
-                            Some(value.as_i64().unwrap() as i32) // i32 -> i64 is a safe unwrap
+                            Some(value.as_i64().unwrap() as usize)
                         } else {
                             None
                         };
@@ -149,22 +149,22 @@ fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String,
 ///
 /// The function will panic if:
 /// - The `taxa_rank` does not exist in the predefined `NCBI_RANKS`.
-pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<i32>, taxa_rank: &str, lineage_cache: &mut HashMap<i32, Vec<Option<i32>>>) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
+pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<usize>, taxa_rank: &str, lineage_cache: &mut HashMap<usize, Vec<Option<usize>>>) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
 
     let url: String = [UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT].concat();
 
     // Remove duplicates from input
-    let target_taxa: HashSet<i32> = target_taxa.iter().cloned().collect();
+    let target_taxa: HashSet<usize> = target_taxa.iter().cloned().collect();
 
     // Prepare a list of taxa that are not yet in the cache
-    let taxa_to_request: Vec<i32> = target_taxa.iter().filter(| tax_id | ! lineage_cache.contains_key(tax_id)).cloned().collect();
+    let taxa_to_request: Vec<usize> = target_taxa.iter().filter(| tax_id | ! lineage_cache.contains_key(tax_id)).cloned().collect();
 
     let http_client = &create_http_client();
     // Fetch lineages from the API for taxa not in the cache
     for i in (0..taxa_to_request.len()).step_by(TAXONOMY_ENDPOINT_BATCH_SIZE) {
 
         let batch_size: usize = std::cmp::min(TAXONOMY_ENDPOINT_BATCH_SIZE, taxa_to_request.len() - i);
-        let batch: Vec<i32> = taxa_to_request[i..(i + batch_size)].to_vec();
+        let batch: Vec<usize> = taxa_to_request[i..(i + batch_size)].to_vec();
         let payload = HTTPTaxonomyPayload { input: batch, extra: true };
 
         // Perform the HTTP POST request
@@ -175,21 +175,21 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<i32>, taxa_rank: &
         let http_response = parse_response_json_string(&http_response)?;
 
         for lineage_json in http_response {
-            let lineage_json: HashMap<String, Option<i32>> = lineage_json;
-            let lineage: Vec<Option<i32>> = NCBI_RANKS.iter()
+            let lineage_json: HashMap<String, Option<usize>> = lineage_json;
+            let lineage: Vec<Option<usize>> = NCBI_RANKS.iter()
                     .filter_map(|key| lineage_json.get(&format!("{}_id", key)).cloned())
                     .collect();
-            let taxon_id: i32 = lineage_json.get("taxon_id").ok_or("Taxon ID not in lineage")?.ok_or("Taxon ID is None")?;
+            let taxon_id: usize = lineage_json.get("taxon_id").ok_or("Taxon ID not in lineage")?.ok_or("Taxon ID is None")?;
             lineage_cache.insert(taxon_id, lineage);
         }
         
     }
 
     let rank_idx = NCBI_RANKS.iter().position(|&ncbi_rank| ncbi_rank == taxa_rank).ok_or("Taxa rank not found in NCBI ranks")?;
-    let lineage: HashSet<i32> = target_taxa.iter()
+    let lineage: HashSet<usize> = target_taxa.iter()
                                             .filter_map(|taxon| lineage_cache[&taxon][rank_idx].clone())
                                             .collect();
-    let lineage: Vec<i32> = lineage.into_iter().collect();
+    let lineage: Vec<usize> = lineage.into_iter().collect();
 
     Ok(lineage)
 }
@@ -210,7 +210,7 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<i32>, taxa_rank: &
 /// # Returns
 /// 
 /// A map from each peptide in the input list to its associated taxa IDs.
-pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Vec<i32>>, Box<dyn std::error::Error>> {
+pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Vec<usize>>, Box<dyn std::error::Error>> {
     
     let url = [UNIPEPT_URL, UNIPEPT_PEPT2FILTERED_ENDPOINT].concat();
 
@@ -230,7 +230,7 @@ pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Ve
         let http_response = serde_json::from_str::<Vec<HTTPPept2TaxaResponse>>(&http_response)?;
 
         for peptide_data in &http_response {
-            let original_taxa: Vec<i32> = peptide_data.taxa.clone();
+            let original_taxa: Vec<usize> = peptide_data.taxa.clone();
             output.insert(peptide_data.peptide.clone(), original_taxa);
         }
     }
@@ -255,7 +255,7 @@ pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Ve
 /// # Returns
 ///
 /// A list of taxon IDs that meet the given rank criteria.
-pub fn get_descendants_for_taxa(target_taxa: Vec<i32>, descendant_rank: String) -> Result<HashSet<i32>, Box<dyn std::error::Error>> {
+pub fn get_descendants_for_taxa(target_taxa: Vec<usize>, descendant_rank: String) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
     
     let url = [UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT].concat();
     let mut all_descendants = HashSet::new();
@@ -296,15 +296,15 @@ pub fn get_descendants_for_taxa(target_taxa: Vec<i32>, descendant_rank: String) 
 /// or if something goes wrong with the network or JSON parsing.
 ///
 /// # Returns
-/// A `HashMap<i32, String>` mapping taxon IDs to their corresponding taxon names.
-pub fn get_names_for_taxa(target_taxa: &Vec<i32>) -> Result<HashMap<i32, String>, Box<dyn std::error::Error>> {
+/// A `HashMap<usize, String>` mapping taxon IDs to their corresponding taxon names.
+pub fn get_names_for_taxa(target_taxa: &Vec<usize>) -> Result<HashMap<usize, String>, Box<dyn std::error::Error>> {
     let url = format!("{}{}", UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT);
-    let mut output: HashMap<i32, String> = HashMap::new();
+    let mut output: HashMap<usize, String> = HashMap::new();
 
     let http_client = &create_http_client();
 
     for i in (0..target_taxa.len()).step_by(TAXONOMY_ENDPOINT_BATCH_SIZE) {
-        let batch: Vec<i32> = target_taxa[i..std::cmp::min(i + TAXONOMY_ENDPOINT_BATCH_SIZE, target_taxa.len())]
+        let batch: Vec<usize> = target_taxa[i..std::cmp::min(i + TAXONOMY_ENDPOINT_BATCH_SIZE, target_taxa.len())]
             .to_vec();
 
         let payload = serde_json::json!({
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_get_unique_lineage_at_specified_rank_with_cache() {
-        let mut lineage_cache: HashMap<i32, Vec<Option<i32>>> = HashMap::new();
+        let mut lineage_cache: HashMap<usize, Vec<Option<usize>>> = HashMap::new();
         lineage_cache.insert(1, vec![Some(1), Some(10), Some(100)]);
         lineage_cache.insert(2, vec![Some(2), Some(20), Some(200)]);
 

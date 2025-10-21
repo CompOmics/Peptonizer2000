@@ -8,11 +8,11 @@ use csv::ReaderBuilder;
 /// Represents a single taxon weight record parsed from a CSV file.
 #[derive(Deserialize)]
 pub struct TaxonWeight {
-    pub id: i32,
+    pub id: usize,
     pub sequence: String,
     pub score: f32,
-    pub psms: i32,
-    pub higher_taxa: i32,
+    pub psms: usize,
+    pub higher_taxa: usize,
     pub weight: f32,
     pub log_weight: f32
 }
@@ -67,12 +67,12 @@ pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::e
 /// Represents an edge in a factor graph connecting two nodes.
 #[derive(Debug, Serialize, Clone)]
 pub struct Edge {
-    id: i32,
-    node1_id: i32,
-    node2_id: i32,
-    node1_in_node2_id: i32,
-    node2_in_node1_id: i32,
-    message_length: Option<i32>
+    id: u32,
+    node1_id: u32,
+    node2_id: u32,
+    node1_in_node2_id: u32,
+    node2_in_node1_id: u32,
+    message_length: Option<u32>
 }
 
 
@@ -88,51 +88,58 @@ impl Edge {
     ///
     /// # Returns
     /// An `Edge` instance representing a connection between the two specified nodes.
-    pub fn new(id: i32, node1_id: i32, node2_id: i32, node1_in_node2_id: i32, node2_in_node1_id: i32, message_length: Option<i32>) -> Edge {
-        Edge { id, node1_id, node2_id, node1_in_node2_id, node2_in_node1_id, message_length }
+    pub fn new(id: usize, node1_id: usize, node2_id: usize, node1_in_node2_id: usize, node2_in_node1_id: usize, message_length: Option<usize>) -> Edge {
+        Edge { 
+            id: id as u32, 
+            node1_id: node1_id as u32, 
+            node2_id: node2_id as u32, 
+            node1_in_node2_id: node1_in_node2_id as u32, 
+            node2_in_node1_id: node2_in_node1_id as u32, 
+            message_length: message_length.map(|x| x as u32) 
+        }
     }
 
 
-    pub fn set_node1_in_node2_id(&mut self, id: i32) {
-        self.node1_in_node2_id = id;
+    pub fn set_node1_in_node2_id(&mut self, id: usize) {
+        self.node1_in_node2_id = id as u32;
     }
 
-    pub fn set_node2_in_node1_id(&mut self, id: i32) {
-        self.node2_in_node1_id = id;
+    pub fn set_node2_in_node1_id(&mut self, id: usize) {
+        self.node2_in_node1_id = id as u32;
     }
 
     /// Returns the ID of the edge.
-    pub fn get_id(&self) -> i32 {
-        self.id
+    pub fn get_id(&self) -> usize {
+        self.id as usize
     }
 
     /// Returns the first node ID of the edge.
-    pub fn get_node1_id(&self) -> i32 {
-        self.node1_id
+    pub fn get_node1_id(&self) -> usize {
+        self.node1_id as usize
     }
 
     /// Returns the second node ID of the edge.
-    pub fn get_node2_id(&self) -> i32 {
-        self.node2_id
+    pub fn get_node2_id(&self) -> usize {
+        self.node2_id as usize
     }
 
     /// Returns a tuple of the two node IDs of the edge.
-    pub fn get_node_ids(&self) -> (i32, i32) {
-        (self.node1_id, self.node2_id)
+    pub fn get_node_ids(&self) -> (usize, usize) {
+        (self.node1_id as usize, self.node2_id as usize)
     }
 
-    pub fn get_node_and_neighbor_ids(&self) -> ((i32, i32), (i32, i32)) {
-        ((self.node1_id, self.node1_in_node2_id), (self.node2_id, self.node2_in_node1_id))
+    pub fn get_node_and_neighbor_ids(&self) -> ((usize, usize), (usize, usize)) {
+        ((self.node1_id as usize, self.node1_in_node2_id as usize), (self.node2_id as usize, self.node2_in_node1_id as usize))
     }
 
     /// Returns the message length associated with the edge.
-    pub fn get_message_length(&self) -> Option<i32> {
-        self.message_length
+    pub fn get_message_length(&self) -> Option<usize> {
+        self.message_length.map(|x| x as usize)
     }
 
-    pub fn copy_with_id(&self, new_id: i32) -> Self {
+    pub fn copy_with_id(&self, new_id: usize) -> Self {
         let mut copy: Edge = self.clone();
-        copy.id = new_id;
+        copy.id = new_id as u32;
         copy
     }
 }
@@ -176,8 +183,8 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A reference to the `Node` corresponding to `node_id`.
-    pub fn get_node(&self, node_id: i32) -> &Node {
-        &self.nodes[node_id as usize]
+    pub fn get_node(&self, node_id: usize) -> &Node {
+        &self.nodes[node_id]
     }
 
     /// Returns a reference to the edge with the given ID.
@@ -187,8 +194,8 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A reference to the `Edge` corresponding to `edge_id`.
-    pub fn get_edge(&self, edge_id: i32) -> &Edge {
-        &self.edges[edge_id as usize]
+    pub fn get_edge(&self, edge_id: usize) -> &Edge {
+        &self.edges[edge_id]
     }
 
     /// Returns the total number of nodes in the graph.
@@ -284,7 +291,7 @@ impl CTFactorGraph {
         let mut nodes: Vec<Node> = Vec::with_capacity(node_count);
         let edge_count = root.children().filter(|n| n.name() == "graph").map(|g| g.children().filter(|n| n.name() == "edge").count()).sum();
         let mut edges: Vec<Edge> = Vec::with_capacity(edge_count);
-        let mut node_map: HashMap<String, i32> = HashMap::new();
+        let mut node_map: HashMap<String, usize> = HashMap::new();
         
         let mut next_node_id = 0;
         let mut next_edge_id = 0;
@@ -301,16 +308,16 @@ impl CTFactorGraph {
             for edge_xml in graph_xml.children().filter(|n| n.name() == "edge") {
                 let (source, target) = Self::parse_edge(edge_xml)?;
     
-                let node1_id: i32 = *node_map.get(&source).ok_or("Source node of edge not present in graph")?;
-                let node2_id: i32 = *node_map.get(&target).ok_or("Target node of edge not present in graph")?;
-                let node1: &Node = &nodes[node1_id as usize];
-                let node2: &Node = &nodes[node2_id as usize];
-                let edge: Edge = Edge { id: next_edge_id, node1_id, node2_id, node1_in_node2_id: node2.neighbors_count() as i32, node2_in_node1_id: node1.neighbors_count() as i32, message_length: None };
+                let node1_id: usize = *node_map.get(&source).ok_or("Source node of edge not present in graph")?;
+                let node2_id: usize = *node_map.get(&target).ok_or("Target node of edge not present in graph")?;
+                let node1: &Node = &nodes[node1_id];
+                let node2: &Node = &nodes[node2_id];
+                let edge = Edge::new(next_edge_id, node1_id, node2_id, node2.neighbors_count(), node1.neighbors_count(), None);
                 next_edge_id += 1;
     
-                let node1: &mut Node = &mut nodes[node1_id as usize];
+                let node1: &mut Node = &mut nodes[node1_id];
                 node1.add_incident_edge(edge.get_id());
-                let node2: &mut Node = &mut nodes[node2_id as usize];
+                let node2: &mut Node = &mut nodes[node2_id];
                 node2.add_incident_edge(edge.get_id());
                 edges.push(edge);
             }
@@ -329,16 +336,16 @@ impl CTFactorGraph {
     pub fn from_taxa_weights(taxa_weights: Vec<TaxonWeight>) -> CTFactorGraph {
 
         // Count frequencies of each higher_taxa
-        let mut higher_taxa_counts: HashMap<i32, usize> = HashMap::new();
+        let mut higher_taxa_counts: HashMap<usize, usize> = HashMap::new();
         for tw in &taxa_weights {
             *higher_taxa_counts.entry(tw.higher_taxa).or_insert(0) += 1;
         }
         // Filter to keep only those with count > 1
         let taxa_weights = taxa_weights.into_iter().filter(|tw| higher_taxa_counts[&tw.higher_taxa] > 1);
 
-        let mut node_id_counter: i32 = 0;
-        let mut edge_id_counter: i32 = 0;
-        let mut node_name_to_id: HashMap<String, i32> = HashMap::new();
+        let mut node_id_counter: usize = 0;
+        let mut edge_id_counter: usize = 0;
+        let mut node_name_to_id: HashMap<String, usize> = HashMap::new();
         let mut nodes: Vec<Node> = Vec::new();
         let mut edges: Vec<Edge> = Vec::new();
         for tw in taxa_weights {
@@ -363,10 +370,10 @@ impl CTFactorGraph {
                 node_name_to_id.insert(cpd_name.clone(), node2_id);
                 node_id_counter += 1;
 
-                let edge = Edge { id: edge_id_counter, node1_id, node2_id, node1_in_node2_id: nodes[node2_id as usize].neighbors_count() as i32, node2_in_node1_id: nodes[node1_id as usize].neighbors_count() as i32, message_length: None };
+                let edge = Edge::new(edge_id_counter, node1_id, node2_id, nodes[node2_id].neighbors_count(), nodes[node1_id].neighbors_count(), None);
                 edges.push(edge);
-                nodes[node1_id as usize].add_incident_edge(edge_id_counter);
-                nodes[node2_id as usize].add_incident_edge(edge_id_counter);
+                nodes[node1_id].add_incident_edge(edge_id_counter);
+                nodes[node2_id].add_incident_edge(edge_id_counter);
                 edge_id_counter += 1;
             }
 
@@ -384,10 +391,10 @@ impl CTFactorGraph {
             // Add edge
             let node1_id = node_name_to_id[&higher_taxa_str];
             let node2_id = node_name_to_id[&cpd_name];
-            let edge = Edge { id: edge_id_counter, node1_id, node2_id, node1_in_node2_id: nodes[node2_id as usize].neighbors_count() as i32, node2_in_node1_id: nodes[node1_id as usize].neighbors_count() as i32, message_length: None };
+            let edge = Edge::new(edge_id_counter, node1_id, node2_id, nodes[node2_id].neighbors_count(), nodes[node1_id].neighbors_count(), None);
             edges.push(edge);
-            nodes[node1_id as usize].add_incident_edge(edge_id_counter);
-            nodes[node2_id as usize].add_incident_edge(edge_id_counter);
+            nodes[node1_id].add_incident_edge(edge_id_counter);
+            nodes[node2_id].add_incident_edge(edge_id_counter);
             edge_id_counter += 1;
         }
 
@@ -395,7 +402,7 @@ impl CTFactorGraph {
         for node in nodes.iter_mut() {
             if node.is_factor_node() {
                 node.set_subtype(NodeType::FactorNode { 
-                    parent_number: node.neighbors_count() as i32 - 1, 
+                    parent_number: (node.neighbors_count() - 1) as u32, 
                     initial_belief: Factor { array: Vec::new(), array_labels: Vec::new() }
                 });
             }
@@ -433,7 +440,7 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A vector of node IDs representing neighbors.
-    pub fn get_neighbors_from_id(&self, node_id: i32) -> impl Iterator<Item = i32> {
+    pub fn get_neighbors_from_id(&self, node_id: usize) -> impl Iterator<Item = usize> {
         self.get_neighbors(self.get_node(node_id))
     }
 
@@ -444,9 +451,9 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// A Iterator over node IDs representing neighbors.
-    pub fn get_neighbors(&self, node: &Node) -> impl Iterator<Item = i32> {
-        node.get_incident_edges().iter().map(|&edge_id| {
-            let (node1_id, node2_id) = self.edges[edge_id as usize].get_node_ids();
+    pub fn get_neighbors(&self, node: &Node) -> impl Iterator<Item = usize> {
+        node.get_incident_edges().map(|edge_id| {
+            let (node1_id, node2_id) = self.edges[edge_id].get_node_ids();
             if node1_id == node.get_id() { node2_id } else { node1_id }
         })
     }
@@ -459,13 +466,13 @@ impl CTFactorGraph {
     ///
     /// # Returns
     /// Node ID of the neighbor.
-    pub fn get_neighbor_node_id(&self, node: &Node, neighbor_id: i32) -> i32 {
-        let (node1_id, node2_id) = self.edges[node.get_incident_edge(neighbor_id) as usize].get_node_ids();
+    pub fn get_neighbor_node_id(&self, node: &Node, neighbor_id: usize) -> usize {
+        let (node1_id, node2_id) = self.edges[node.get_incident_edge(neighbor_id)].get_node_ids();
         if node1_id == node.get_id() { node2_id } else { node1_id }
     }
 
-    pub fn get_neighbor_node_and_neighbor_id(&self, node: &Node, neighbor_id: i32) -> (i32, i32) {
-        let ((node1_id, node1_in_node2_id), (node2_id, node2_in_node1_id)) = self.edges[node.get_incident_edge(neighbor_id) as usize].get_node_and_neighbor_ids();
+    pub fn get_neighbor_node_and_neighbor_id(&self, node: &Node, neighbor_id: usize) -> (usize, usize) {
+        let ((node1_id, node1_in_node2_id), (node2_id, node2_in_node1_id)) = self.edges[node.get_incident_edge(neighbor_id)].get_node_and_neighbor_ids();
         if node1_id == node.get_id() { (node2_id, node1_in_node2_id) } else { (node1_id, node2_in_node1_id) }
     }
 
@@ -475,11 +482,11 @@ impl CTFactorGraph {
     /// * `factor_id` - ID of the factor node.
     ///
     /// # Returns
-    /// `Ok(i32)` containing the peptide node ID if found.
+    /// `Ok(usize)` containing the peptide node ID if found.
     ///
     /// # Errors
     /// Returns an error if no peptide node is connected to the factor node.
-    pub fn get_peptide_for_factor(&self, factor_id: i32) -> Result<i32, Box<dyn std::error::Error>> {
+    pub fn get_peptide_for_factor(&self, factor_id: usize) -> Result<usize, Box<dyn std::error::Error>> {
         for neighbor_id in self.get_neighbors_from_id(factor_id) {
             let neighbor = self.get_node(neighbor_id);
             if let NodeType::PeptideNode { .. } = neighbor.get_subtype() {
@@ -499,34 +506,34 @@ impl CTFactorGraph {
         let mut new_edges: Vec<Edge> = Vec::with_capacity(&self.edges.len() + ct_node_count);
 
         // Add nodes and keep track of edges to add/remove
-        let mut next_edge_id: i32 = 0;
-        let mut next_node_id: i32 = self.nodes.len() as i32;
+        let mut next_edge_id: usize = 0;
+        let mut next_node_id: usize = self.nodes.len();
         for node in &self.nodes {
             if node.is_factor_node() {
                 if node.neighbors_count() > 2 {
                     let mut prot_names: Vec<String> = self.get_neighbors(node)
-                        .map(|n|&self.nodes[n as usize])
+                        .map(|n|&self.nodes[n])
                         .filter(|n|n.is_taxon_node())
                         .map(|n| n.get_name().to_string()).collect();
                     
                     // TODO: names necessary? These nodes are added after graphml is created, because this is executed in execute_pepgm. The names are not contained in any output I think. For the algorithm itself, strings are inefficient
                     let new_node_name = format!("CTree {}", prot_names.join(" "));
                     let new_node_id = next_node_id;
-                    let new_node = Node::new_convolution_node(new_node_id, new_node_name, prot_names.len() as i32);
+                    let new_node = Node::new_convolution_node(new_node_id, new_node_name, prot_names.len());
                     next_node_id += 1;
                     new_nodes.push(new_node);
 
                     // Create edge Factor CTree, set node_in_node_id's to 0, we will set them correctly later
-                    let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: node.get_id(), node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: Some(prot_names.len() as i32 + 1) };
+                    let edge = Edge::new(next_edge_id, new_node_id, node.get_id(), 0, 0, Some(prot_names.len() + 1));
                     next_edge_id += 1;
                     new_edges.push(edge);
 
-                    for (i, &edge_id) in node.get_incident_edges().iter().enumerate() {
-                        let neighbor_id: i32 = self.get_neighbor_node_id(node, i as i32);
+                    for (i, edge_id) in node.get_incident_edges().enumerate() {
+                        let neighbor_id = self.get_neighbor_node_id(node, i);
                         let neighbor: &Node = self.get_node(neighbor_id);
                         if neighbor.is_taxon_node() {
                             // Create edge CTree - Taxon, set node_in_node_id's to 0, we will set them correctly later
-                            let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: neighbor_id, node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: None };
+                            let edge = Edge::new(next_edge_id, new_node_id, neighbor_id, 0, 0, None);
                             next_edge_id += 1;
                             new_edges.push(edge);
                         } else {
@@ -536,7 +543,7 @@ impl CTFactorGraph {
                         }
                     }
                 } else {
-                    for &edge_id in node.get_incident_edges() {
+                    for edge_id in node.get_incident_edges() {
                         new_edges.push(self.get_edge(edge_id).copy_with_id(next_edge_id));
                         next_edge_id += 1;
                     }
@@ -547,15 +554,15 @@ impl CTFactorGraph {
 
         // Clear the incident edges of each node, and refill in the next step
         for node in &mut new_nodes {
-            node.set_incident_edges(Vec::new());
+            node.set_incident_edges(Vec::new().into_iter());
         }
         
         for edge in &mut new_edges {
             let (node1_id, node2_id) = edge.get_node_ids();
-            edge.set_node1_in_node2_id(new_nodes[node2_id as usize].neighbors_count() as i32);
-            edge.set_node2_in_node1_id(new_nodes[node1_id as usize].neighbors_count() as i32);
-            new_nodes[node1_id as usize].add_incident_edge(edge.get_id());
-            new_nodes[node2_id as usize].add_incident_edge(edge.get_id());
+            edge.set_node1_in_node2_id(new_nodes[node2_id].neighbors_count());
+            edge.set_node2_in_node1_id(new_nodes[node1_id].neighbors_count());
+            new_nodes[node1_id].add_incident_edge(edge.get_id());
+            new_nodes[node2_id].add_incident_edge(edge.get_id());
         }
 
         self.nodes = new_nodes;
@@ -567,13 +574,13 @@ impl CTFactorGraph {
     /// # Returns
     /// A vector of `CTFactorGraph` instances, one per connected component.
     pub fn connected_components(&self) -> Vec<Self> {
-        let mut visited: HashSet<i32> = HashSet::new();
+        let mut visited: HashSet<usize> = HashSet::new();
         let mut components: Vec<Self> = Vec::new();
 
         for start_node in &self.nodes {
             if visited.insert(start_node.get_id()) {
-                let mut component_ids: Vec<i32> = Vec::new();
-                let mut old_to_new_nodes: HashMap<i32, i32> = HashMap::new();
+                let mut component_ids: Vec<usize> = Vec::new();
+                let mut old_to_new_nodes: HashMap<usize, usize> = HashMap::new();
 
                 let mut new_nodes: Vec<Node> = Vec::new();
                 let mut new_edges: Vec<Edge> = Vec::new();
@@ -585,21 +592,21 @@ impl CTFactorGraph {
 
                 // Create new nodes
                 for node_id in &component_ids {
-                    let node = self.nodes[*node_id as usize].copy_with_id(old_to_new_nodes[&node_id]);
+                    let node = self.nodes[*node_id].copy_with_id(old_to_new_nodes[&node_id]);
                     new_nodes.push(node);
                 }
 
                 // Select edges to keep and update the node ids
-                let mut next_edge_id: i32 = 0;
-                let mut component_edge_ids: HashSet<i32> = HashSet::new();
-                let mut old_to_new_edges: HashMap<i32, i32> = HashMap::new();
+                let mut next_edge_id: usize = 0;
+                let mut component_edge_ids: HashSet<usize> = HashSet::new();
+                let mut old_to_new_edges: HashMap<usize, usize> = HashMap::new();
                 for edge in &self.edges {
 
-                    let ((source, source_in_target), (target, target_in_source)): ((i32, i32), (i32, i32)) = edge.get_node_and_neighbor_ids();
+                    let ((source, source_in_target), (target, target_in_source)): ((usize, usize), (usize, usize)) = edge.get_node_and_neighbor_ids();
                     if component_ids.contains(&source) && component_ids.contains(&target) {
 
-                        let (new_source, new_target): (i32, i32) = (old_to_new_nodes[&source], old_to_new_nodes[&target]);
-                        let new_edge = Edge { id: next_edge_id, node1_id: new_source, node2_id: new_target, node1_in_node2_id: source_in_target, node2_in_node1_id: target_in_source, message_length: edge.get_message_length() };
+                        let (new_source, new_target): (usize, usize) = (old_to_new_nodes[&source], old_to_new_nodes[&target]);
+                        let new_edge = Edge::new(next_edge_id, new_source, new_target, source_in_target, target_in_source, edge.get_message_length());
                         next_edge_id += 1;
 
                         component_edge_ids.insert(edge.get_id());
@@ -611,8 +618,8 @@ impl CTFactorGraph {
 
                 // Update edge ids of incident edges
                 for node in &mut new_nodes {
-                    let new_incident_edges: Vec<i32> = node.get_incident_edges().into_iter().filter(|e| component_edge_ids.contains(e)).map(|e| old_to_new_edges[e]).collect();
-                    node.set_incident_edges(new_incident_edges);
+                    let new_incident_edges: Vec<usize> = node.get_incident_edges().filter(|e| component_edge_ids.contains(e)).map(|e| old_to_new_edges[&e]).collect();
+                    node.set_incident_edges(new_incident_edges.into_iter());
                 }
                 
                 // Create graph and add to components
@@ -626,15 +633,15 @@ impl CTFactorGraph {
 
     fn find_component_rec(
         &self, 
-        start_id: i32, 
-        component_ids: &mut Vec<i32>, 
-        old_to_new_nodes: &mut HashMap<i32, i32>, 
-        visited: &mut HashSet<i32>
+        start_id: usize, 
+        component_ids: &mut Vec<usize>, 
+        old_to_new_nodes: &mut HashMap<usize, usize>, 
+        visited: &mut HashSet<usize>
     ) {
-        let start_node: &Node = &self.nodes[start_id as usize];
+        let start_node: &Node = &self.nodes[start_id];
         for neighbor_id in self.get_neighbors(&start_node) {
             if visited.insert(neighbor_id) {
-                let next_id: i32 = component_ids.len() as i32;
+                let next_id: usize = component_ids.len();
                 component_ids.push(neighbor_id);
                 old_to_new_nodes.insert(neighbor_id, next_id);
                 self.find_component_rec(neighbor_id, component_ids, old_to_new_nodes, visited);                
@@ -677,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_edge_getters() {
-        let edge = Edge { id: 1, node1_id: 10, node2_id: 20, message_length: Some(5) };
+        let edge = Edge::new(1, 10, 20, Some(5));
         assert_eq!(edge.get_id(), 1);
         assert_eq!(edge.get_node1_id(), 10);
         assert_eq!(edge.get_node2_id(), 20);
@@ -730,7 +737,7 @@ mod tests {
 
         for (i, node) in graph.get_nodes().iter().enumerate() {
             if node.is_factor_node() {
-                let result = graph.get_peptide_for_factor(i as i32);
+                let result = graph.get_peptide_for_factor(i);
                 assert!(result.is_ok() || result.is_err());
             }
         }

@@ -9,9 +9,9 @@ use csv::{ReaderBuilder, WriterBuilder};
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Taxon {
     /// Unique identifier of the taxon.
-    pub id: i32,
+    pub id: usize,
      /// Identifier of the higher-level taxon it belongs to.
-    pub higher_taxa: i32,
+    pub higher_taxa: usize,
     /// Weight of the taxon, scaled for comparison.
     pub scaled_weight: f32,
     /// Whether the taxon is unique in the dataset.
@@ -20,11 +20,11 @@ pub struct Taxon {
     /// IDs of taxa belonging to the same cluster.
     /// Serialized as a string, deserialized back into a vector.
     #[serde(default, serialize_with = "vec_to_string", deserialize_with = "string_to_vec")]
-    pub cluster_members: Vec<i32>
+    pub cluster_members: Vec<usize>
 }
 
 
-/// Converts a `Vec<i32>` to a serialized string representation.
+/// Converts a `Vec<usize>` to a serialized string representation.
 ///
 /// # Arguments
 /// * `vec` - Reference to the vector to be serialized.
@@ -35,7 +35,7 @@ pub struct Taxon {
 ///
 /// # Errors
 /// Returns an error if serialization fails.
-fn vec_to_string<S>(vec: &Vec<i32>, serializer: S) -> Result<S::Ok, S::Error>
+fn vec_to_string<S>(vec: &Vec<usize>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -47,7 +47,7 @@ where
 }
 
 
-/// Converts a serialized string back into a `Vec<i32>`.
+/// Converts a serialized string back into a `Vec<usize>`.
 ///
 /// # Arguments
 /// * `deserializer` - Deserializer provided by Serde.
@@ -57,13 +57,13 @@ where
 ///
 /// # Errors
 /// Returns an error if the string cannot be deserialized or parsed into integers.
-pub fn string_to_vec<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
+pub fn string_to_vec<'de, D>(deserializer: D) -> Result<Vec<usize>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(deserializer)?;
     let vec = s[1..(s.len()-1)].split(',')
-               .filter_map(|item| item.trim().parse::<i32>().ok())
+               .filter_map(|item| item.trim().parse::<usize>().ok())
                .collect();
     Ok(vec)
 }
@@ -142,19 +142,19 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
         .filter(|tw| taxon_index.contains_key(&tw.higher_taxa))
         .collect();
 
-    let higher_taxa: Vec<i32> = taxa_weights.iter().map(|tw| tw.higher_taxa).collect();
-    let mut weight_sorted_taxa: Vec<i32> = higher_taxa.clone();
-    let mut taxa_clusters: Vec<Vec<i32>> = Vec::new();
+    let higher_taxa: Vec<usize> = taxa_weights.iter().map(|tw| tw.higher_taxa).collect();
+    let mut weight_sorted_taxa: Vec<usize> = higher_taxa.clone();
+    let mut taxa_clusters: Vec<Vec<usize>> = Vec::new();
 
-    let mut cluster_heads: Vec<i32> = Vec::new();
+    let mut cluster_heads: Vec<usize> = Vec::new();
 
     while ! weight_sorted_taxa.is_empty() {
         let taxon1 = weight_sorted_taxa[0];
-        let mut cluster_list: Vec<i32> = Vec::new();
+        let mut cluster_list: Vec<usize> = Vec::new();
         cluster_heads.push(taxon1);
 
         for &taxon2 in &higher_taxa {
-            if similarities[taxon_index[&taxon2] as usize][taxon_index[&taxon1] as usize] > similarity_threshold {
+            if similarities[taxon_index[&taxon2]][taxon_index[&taxon1]] > similarity_threshold {
                 cluster_list.push(taxon2);
                 if weight_sorted_taxa.contains(&taxon2) {
                     weight_sorted_taxa.retain(|&taxon| taxon != taxon2);
@@ -188,13 +188,13 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
 ///
 /// # Errors
 /// Returns an error if node parsing fails.
-fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<i32>>, Box<dyn std::error::Error>> {
+fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<usize, HashSet<usize>>, Box<dyn std::error::Error>> {
     let mut peptidome_dict = HashMap::new();
 
     for node in graph.get_nodes() {
         if node.is_taxon_node() {
-            let node_id: i32 = String::from(node.get_name()).parse()?;
-            let neighbors: HashSet<i32> = graph.get_neighbors(node)
+            let node_id: usize = String::from(node.get_name()).parse()?;
+            let neighbors: HashSet<usize> = graph.get_neighbors(node)
                 .map(|factor_id| graph.get_peptide_for_factor(factor_id))
                 .collect::<Result<_, _>>()?;
             peptidome_dict.insert(node_id, neighbors);
@@ -212,13 +212,13 @@ fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<i32, HashSet<
 ///
 /// # Returns
 /// Tuple of (similarity matrix, taxon index map).
-fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<i32, HashSet<i32>>) -> (Vec<Vec<f32>>, HashMap<i32, u32>) {
+fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<usize, HashSet<usize>>) -> (Vec<Vec<f32>>, HashMap<usize, usize>) {
     let mut sim_matrix = Vec::new();
-    let mut taxon_index: HashMap<i32, u32> = HashMap::new();
+    let mut taxon_index: HashMap<usize, usize> = HashMap::new();
 
     let peptidome_keys = peptidome_dict.keys();
     for (index, taxon1) in peptidome_keys.clone().enumerate() {
-        taxon_index.insert(*taxon1, index as u32);
+        taxon_index.insert(*taxon1, index);
         let set1 = &peptidome_dict[taxon1];
         let mut sim_row = Vec::new();
         for taxon2 in peptidome_keys.clone() {
@@ -250,7 +250,7 @@ mod tests {
         let serialized = serde_json::to_string(&values).unwrap();
         assert_eq!(serialized, "[1,2,3]");
 
-        let deserialized: Vec<i32> = serde_json::from_str(&serialized).unwrap();
+        let deserialized: Vec<usize> = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized, values);
     }
 
@@ -274,7 +274,7 @@ id,higher_taxa,scaled_weight,unique
 
     #[test]
     fn test_compute_detected_peptidome_similarity() {
-        let mut peptidome_dict: HashMap<i32, HashSet<i32>> = HashMap::new();
+        let mut peptidome_dict: HashMap<usize, HashSet<usize>> = HashMap::new();
         peptidome_dict.insert(1, HashSet::from([1, 2]));
         peptidome_dict.insert(2, HashSet::from([2, 3]));
 

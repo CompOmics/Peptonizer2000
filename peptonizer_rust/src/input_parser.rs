@@ -14,14 +14,14 @@ use serde_json;
 /// # Returns
 /// A tuple containing:
 /// * `HashMap<String, f64>` - Maximum score per peptide.
-/// * `HashMap<String, u32>` - Count of occurrences per peptide.
+/// * `HashMap<String, usize>` - Count of occurrences per peptide.
 ///
 /// # Errors
 /// Returns an error if lines are malformed, scores cannot be parsed,
 /// or the input is otherwise invalid.
-fn parse_peptides(tsv_content: String) -> Result<(HashMap<String, f64>, HashMap<String, u32>), Box<dyn std::error::Error>> {
+fn parse_peptides(tsv_content: String) -> Result<(HashMap<String, f64>, HashMap<String, usize>), Box<dyn std::error::Error>> {
     let mut peptides_scores: HashMap<String, f64> = HashMap::new();
-    let mut peptides_counts: HashMap<String, u32> = HashMap::new();
+    let mut peptides_counts: HashMap<String, usize> = HashMap::new();
 
     let mut lines = tsv_content.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
 
@@ -127,7 +127,7 @@ mod tests {
         let (scores_json, counts_json) = parse_input_peptides(sample_tsv()).unwrap();
 
         let scores: HashMap<String, f64> = serde_json::from_str(&scores_json).unwrap();
-        let counts: HashMap<String, u32> = serde_json::from_str(&counts_json).unwrap();
+        let counts: HashMap<String, usize> = serde_json::from_str(&counts_json).unwrap();
 
         assert_eq!(scores["PEP1"], 0.8);
         assert_eq!(scores["PEP2"], 1.0);

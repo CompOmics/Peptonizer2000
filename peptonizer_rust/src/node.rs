@@ -19,20 +19,20 @@ pub enum NodeType {
     /// Peptide node with prior probabilities.
     PeptideNode { initial_belief_0: f64, initial_belief_1: f64 },
     /// Factor node with parent count and CPD.
-    FactorNode { parent_number: i32, initial_belief: Factor },
+    FactorNode { parent_number: u32, initial_belief: Factor },
     /// Taxon node with prior probabilities.
     TaxonNode { initial_belief_0: f64, initial_belief_1: f64 },
     /// Convolution tree node with a number of parents.
-    ConvolutionTreeNode { number_of_parents: i32 }
+    ConvolutionTreeNode { number_of_parents: u32 }
 }
 
 
 /// Represents a node in the factor graph with its attributes and connections.
 #[derive(Debug, Clone)]
 pub struct Node {
-    id: i32,
+    id: u32,
     name: String,
-    incident_edges: Vec<i32>,
+    incident_edges: Vec<u32>,
     subtype: NodeType
 }
 
@@ -48,10 +48,10 @@ impl Node {
     ///
     /// # Returns
     /// A new `Node`.
-    pub fn new(id: i32, name: String, subtype: NodeType) -> Self {
-        let incident_edges: Vec<i32> = Vec::new();
+    pub fn new(id: usize, name: String, subtype: NodeType) -> Self {
+        let incident_edges: Vec<u32> = Vec::new();
      
-        Self { id, name, incident_edges, subtype }
+        Self { id: id as u32, name, incident_edges, subtype }
     }
 
     /// Creates a copy of the node with a new ID.
@@ -61,9 +61,9 @@ impl Node {
     ///
     /// # Returns
     /// A cloned node with updated ID.
-    pub fn copy_with_id(&self, new_id: i32) -> Self {
+    pub fn copy_with_id(&self, new_id: usize) -> Self {
         let mut copy: Node = self.clone();
-        copy.id = new_id;
+        copy.id = new_id as u32;
         copy
     }
 
@@ -76,16 +76,16 @@ impl Node {
     ///
     /// # Returns
     /// A new convolution tree node.
-    pub fn new_convolution_node(id: i32, name: String, number_of_parents: i32) -> Self {
-        Self { id, name, incident_edges: Vec::new(), subtype: NodeType::ConvolutionTreeNode { number_of_parents } }
+    pub fn new_convolution_node(id: usize, name: String, number_of_parents: usize) -> Self {
+        Self { id: id as u32, name, incident_edges: Vec::new(), subtype: NodeType::ConvolutionTreeNode { number_of_parents: number_of_parents as u32 } }
     }
 
     /// Adds an incident edge to the node.
     ///
     /// # Arguments
     /// * `edge` - Edge identifier.
-    pub fn add_incident_edge(&mut self, edge: i32) {
-        self.incident_edges.push(edge);
+    pub fn add_incident_edge(&mut self, edge: usize) {
+        self.incident_edges.push(edge as u32);
     }
 
     /// Returns the node's name.
@@ -94,8 +94,8 @@ impl Node {
     }
 
     /// Returns the node's ID.
-    pub fn get_id(&self) -> i32 {
-        self.id
+    pub fn get_id(&self) -> usize {
+        self.id as usize
     }
 
     /// Returns a reference to the node subtype.
@@ -123,21 +123,21 @@ impl Node {
     ///
     /// # Returns
     /// Edge identifier.
-    pub fn get_incident_edge(&self, neighbor_id: i32) -> i32 {
-        self.incident_edges[neighbor_id as usize]
+    pub fn get_incident_edge(&self, neighbor_id: usize) -> usize {
+        self.incident_edges[neighbor_id] as usize
     }
 
     /// Returns all incident edges.
-    pub fn get_incident_edges(&self) -> &Vec<i32> {
-        &self.incident_edges
+    pub fn get_incident_edges(&self) -> impl Iterator<Item = usize> {
+        self.incident_edges.iter().map(|&edge_id| edge_id as usize)
     }
 
     /// Replaces incident edges with a new list.
     ///
     /// # Arguments
     /// * `new_incident_edges` - Replacement edge list.
-    pub fn set_incident_edges(&mut self, new_incident_edges: Vec<i32>) {
-        self.incident_edges = new_incident_edges;
+    pub fn set_incident_edges(&mut self, new_incident_edges: impl Iterator<Item = usize>) {
+        self.incident_edges = new_incident_edges.map(|x| x as u32).collect();
     }
 
     /// Returns the node category as a string.
@@ -186,24 +186,24 @@ impl Node {
     /// * `regularized` - Whether to apply parent-count regularization.
     pub fn fill_in_factor(&mut self, alpha: f64, beta: f64, regularized: bool) {
         if let NodeType::FactorNode { parent_number, .. } = self.subtype {
-            let degree: i32 = parent_number;
+            let degree: usize = parent_number as usize;
 
-            let mut cpd_array: Vec<[f64; 2]> = Vec::with_capacity(degree as usize + 1);
-            let mut cpd_array_regularized = Vec::with_capacity(degree as usize + 1);
-            let exponent_array: Vec<i32> = (0..=degree).collect();
-            let divide_array: Vec<f64> = std::iter::once(1i32).chain(1..=degree).map(|x| x as f64).collect();
+            let mut cpd_array: Vec<[f64; 2]> = Vec::with_capacity(degree + 1);
+            let mut cpd_array_regularized = Vec::with_capacity(degree + 1);
+            let exponent_array: Vec<usize> = (0..=degree).collect();
+            let divide_array: Vec<f64> = std::iter::once(1usize).chain(1..=degree).map(|x| x as f64).collect();
             
             // regularize cpd priors to penalize higher number of parents
             // log domain to avoid underflow
             let mut cpd_sum: f64 = 0.0;
             let mut cpd_regularized_sum: f64 = 0.0;
             for (i, exp) in exponent_array.iter().enumerate() {
-                let cpd_0 = (1.0 - alpha).powi(*exp) * (1.0 - beta);
+                let cpd_0 = (1.0 - alpha).powi(*exp as i32) * (1.0 - beta);
                 let cpd_1 = 1.0 - cpd_0;
                 cpd_sum += cpd_0 + cpd_1;
                 cpd_array.push([cpd_0, cpd_1]);
 
-                let cpd_regularized_0 = (cpd_0.powi(*exp) * (1.0 - beta)) / divide_array[i];
+                let cpd_regularized_0 = (cpd_0.powi(*exp as i32) * (1.0 - beta)) / divide_array[i];
                 let cpd_regularized_1 = 1.0 - cpd_regularized_0;
                 cpd_regularized_sum += cpd_regularized_0 + cpd_regularized_1;
                 cpd_array_regularized.push([cpd_regularized_0, cpd_regularized_1]);
@@ -275,7 +275,7 @@ impl Node {
     ///
     /// # Returns
     /// A new `Node` or error if subtype is unknown.
-    pub fn parse_node(node: &Element, id: i32) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn parse_node(node: &Element, id: usize) -> Result<Self, Box<dyn std::error::Error>> {
         // Process a node
         let name = node.attr("id").ok_or("id not found while parsing Node")?.to_string();
     
@@ -288,9 +288,9 @@ impl Node {
     
         let subtype: NodeType = match current_node_data.get("d2").map(String::as_str) {
             Some("factor") => {
-                let parent_number: i32 = current_node_data.get("d3").ok_or("d3 not found while parsing factor Node")?.parse()?;
+                let parent_number: usize = current_node_data.get("d3").ok_or("d3 not found while parsing factor Node")?.parse()?;
                 let initial_belief: Factor = Factor { array: Vec::new(), array_labels: Vec::new() };
-                NodeType::FactorNode { parent_number, initial_belief }
+                NodeType::FactorNode { parent_number: parent_number as u32, initial_belief }
             }
             Some("peptide") => {
                 let initial_belief_0: f64 = current_node_data.get("d0").ok_or("d0 not found while parsing peptide Node")?.parse()?;
@@ -307,7 +307,7 @@ impl Node {
             }
         };
 
-        Ok(Self { id, name, incident_edges: Vec::new(), subtype })
+        Ok(Self { id: id as u32, name, incident_edges: Vec::new(), subtype })
     }
 
     /// Serializes the node into GraphML string format.
@@ -344,7 +344,7 @@ mod tests {
     use super::*;
     use minidom::Element;
 
-    fn dummy_factor_node(id: i32, parent_number: i32) -> Node {
+    fn dummy_factor_node(id: usize, parent_number: usize) -> Node {
         Node::new(
             id,
             format!("factor_{}", id),

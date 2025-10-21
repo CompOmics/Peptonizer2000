@@ -28,12 +28,12 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
         .has_headers(false)
         .from_reader(csv_content.as_bytes());
 
-    let mut tax_ids: Vec<(i32, f32)> = Vec::new();
+    let mut tax_ids: Vec<(usize, f32)> = Vec::new();
 
     for result in rdr.deserialize() {
         let record: Row = result?;
         if record.row_type == "taxon" {
-            if let (Ok(id), Ok(score)) = (record.id.parse::<i32>(), record.score.parse::<f32>()) {
+            if let (Ok(id), Ok(score)) = (record.id.parse::<usize>(), record.score.parse::<f32>()) {
                 tax_ids.push((id, score));
             }
         }
@@ -43,8 +43,8 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
     tax_ids.sort_by(|a, b| a.1.partial_cmp(&b.1).expect("Partial compare returned None"));
 
     // Collect all taxon IDs for name lookup
-    let ids: Vec<i32> = tax_ids.iter().map(|(id, _)| *id).collect();
-    let name_mapping: HashMap<i32, String> = get_names_for_taxa(&ids)
+    let ids: Vec<usize> = tax_ids.iter().map(|(id, _)| *id).collect();
+    let name_mapping: HashMap<usize, String> = get_names_for_taxa(&ids)
         .map_err(|e| format!("Failed to retrieve taxon names: {}", e))?;
 
     // Build CSV output

@@ -23,7 +23,7 @@ use csv::ReaderBuilder;
 /// * `results` - Vector of belief distributions for each node; each element is a vector `[P(0), P(1)]`.
 fn calibrate_all_subgraphs(
     ct_factor_graphs: Vec<CTFactorGraph>,
-    max_iterations: i32,
+    max_iterations: u32,
     tolerance: f64
 ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>), Box<dyn std::error::Error>>{
     let mut results: Vec<Vec<f64>> = Vec::new();
@@ -75,7 +75,7 @@ pub fn run_belief_propagation(
     beta: f64,
     regularized: bool,
     prior: f64,
-    max_iter: i32,
+    max_iter: u32,
     tol: f64
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut ct_factor_graph = CTFactorGraph::from_graphml(&graph)?;
@@ -133,7 +133,7 @@ fn generate_csv(node_names: Vec<String>, node_types: Vec<String>, results: Vec<V
 ///
 /// # Returns
 ///
-/// JSON string mapping taxon IDs (`i32`) to their posterior probabilities (`f64`), sorted by score.
+/// JSON string mapping taxon IDs (`usize`) to their posterior probabilities (`f64`), sorted by score.
 pub fn parse_taxon_scores(csv_content: String) -> Result<String, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
@@ -149,7 +149,7 @@ pub fn parse_taxon_scores(csv_content: String) -> Result<String, Box<dyn std::er
         
         // Filter rows where "type" == "taxon"
         if record_type == "taxon" {
-            let id: i32 = record.get(0).ok_or("Index 0 not in record")?.parse()?;
+            let id: usize = record.get(0).ok_or("Index 0 not in record")?.parse()?;
             let score: f64 = record.get(1).ok_or("Index 1 not in record")?.parse()?;
             records.push((id, score));
         }
@@ -190,7 +190,7 @@ mod tests {
         let csv_content = "123,0.8,taxon\n456,0.5,taxon\n789,0.9,peptide\n".to_string();
         let json = parse_taxon_scores(csv_content);
 
-        let parsed: HashMap<i32, f64> = serde_json::from_str(&json).unwrap();
+        let parsed: HashMap<usize, f64> = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.get(&456), Some(&0.5));
         assert_eq!(parsed.get(&123), Some(&0.8));
         assert!(parsed.get(&789).is_none());

@@ -8,7 +8,7 @@ const STEP: f64 = (MAX_X - MIN_X) / (N as f64 - 1.0);
 
 #[inline(always)]
 pub fn ln_from_table(x: f64) -> f64 {
-    let idx = (((x - MIN_X) / STEP) as usize).min(N - 1);
+    let idx = ((x - MIN_X) / STEP) as usize;
     LOG_TABLE[idx]
 }
 
