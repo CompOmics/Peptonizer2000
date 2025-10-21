@@ -34,7 +34,7 @@ pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeig
         .has_headers(true)
         .from_reader(taxa_weights_csv.as_bytes());
     
-    let mut taxa_weights = Vec::new();
+    let mut taxa_weights = Vec::with_capacity(rdr.records().count());
     for record in rdr.deserialize() {
         let row: TaxonWeight = record?;
         taxa_weights.push(row);
@@ -128,6 +128,12 @@ impl Edge {
     /// Returns the message length associated with the edge.
     pub fn get_message_length(&self) -> Option<i32> {
         self.message_length
+    }
+
+    pub fn copy_with_id(&self, new_id: i32) -> Self {
+        let mut copy: Edge = self.clone();
+        copy.id = new_id;
+        copy
     }
 }
 
@@ -272,11 +278,13 @@ impl CTFactorGraph {
     /// # Errors
     /// Returns an error if parsing the GraphML fails or if nodes/edges cannot be created correctly.
     pub fn from_graphml(graphml_str: &str) -> Result<CTFactorGraph, Box<dyn std::error::Error>> {
-        let mut nodes: Vec<Node> = Vec::new();
-        let mut edges: Vec<Edge> = Vec::new();
-        let mut node_map: HashMap<String, i32> = HashMap::new();
-    
         let root: Element = graphml_str.parse()?;
+
+        let node_count = root.children().filter(|n| n.name() == "graph").map(|g| g.children().filter(|n| n.name() == "node").count()).sum();
+        let mut nodes: Vec<Node> = Vec::with_capacity(node_count);
+        let edge_count = root.children().filter(|n| n.name() == "graph").map(|g| g.children().filter(|n| n.name() == "edge").count()).sum();
+        let mut edges: Vec<Edge> = Vec::with_capacity(edge_count);
+        let mut node_map: HashMap<String, i32> = HashMap::new();
         
         let mut next_node_id = 0;
         let mut next_edge_id = 0;
@@ -485,75 +493,61 @@ impl CTFactorGraph {
     pub fn add_ct_nodes(&mut self) {
         // When creating the CTGraph and not just reading from a previously saved graph format, use this function to add the CT nodes
         
-        let mut edges_to_add: Vec<Edge> = Vec::new();
-        let mut edges_to_remove: HashSet<(i32, i32)> = HashSet::new();
-        let mut nodes_to_add: Vec<Node> = Vec::new();
+        let ct_node_count = self.nodes.iter().filter(|n| n.is_factor_node() && n.neighbors_count() > 2).count();
+        let mut new_nodes: Vec<Node> = Vec::with_capacity(&self.nodes.len() + ct_node_count);
+        new_nodes.extend_from_slice(&self.nodes);
+        let mut new_edges: Vec<Edge> = Vec::with_capacity(&self.edges.len() + ct_node_count);
 
         // Add nodes and keep track of edges to add/remove
-        let mut next_edge_id: i32 = self.edges.len() as i32;
+        let mut next_edge_id: i32 = 0;
         let mut next_node_id: i32 = self.nodes.len() as i32;
         for node in &self.nodes {
-            if node.is_factor_node() && node.neighbors_count() > 2 {
+            if node.is_factor_node() {
+                if node.neighbors_count() > 2 {
+                    let mut prot_names: Vec<String> = self.get_neighbors(node)
+                        .map(|n|&self.nodes[n as usize])
+                        .filter(|n|n.is_taxon_node())
+                        .map(|n| n.get_name().to_string()).collect();
+                    
+                    // TODO: names necessary? These nodes are added after graphml is created, because this is executed in execute_pepgm. The names are not contained in any output I think. For the algorithm itself, strings are inefficient
+                    let new_node_name = format!("CTree {}", prot_names.join(" "));
+                    let new_node_id = next_node_id;
+                    let new_node = Node::new_convolution_node(new_node_id, new_node_name, prot_names.len() as i32);
+                    next_node_id += 1;
+                    new_nodes.push(new_node);
 
-                let mut prot_names: Vec<String> = Vec::new();
-                let mut prot_ids: Vec<i32> = Vec::new();
-                for neighbor_id in self.get_neighbors(node) {
-                    let neighbor: &Node = &self.nodes[neighbor_id as usize];
-                    if neighbor.is_taxon_node() {
-                        prot_ids.push(neighbor_id);
-                        prot_names.push(neighbor.get_name().to_string());
+                    // Create edge Factor CTree, set node_in_node_id's to 0, we will set them correctly later
+                    let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: node.get_id(), node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: Some(prot_names.len() as i32 + 1) };
+                    next_edge_id += 1;
+                    new_edges.push(edge);
+
+                    for (i, &edge_id) in node.get_incident_edges().iter().enumerate() {
+                        let neighbor_id: i32 = self.get_neighbor_node_id(node, i as i32);
+                        let neighbor: &Node = self.get_node(neighbor_id);
+                        if neighbor.is_taxon_node() {
+                            // Create edge CTree - Taxon, set node_in_node_id's to 0, we will set them correctly later
+                            let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: neighbor_id, node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: None };
+                            next_edge_id += 1;
+                            new_edges.push(edge);
+                        } else {
+                            // Add Factor - Peptide node
+                            new_edges.push(self.get_edge(edge_id).copy_with_id(next_edge_id));
+                            next_edge_id += 1;
+                        }
+                    }
+                } else {
+                    for &edge_id in node.get_incident_edges() {
+                        new_edges.push(self.get_edge(edge_id).copy_with_id(next_edge_id));
+                        next_edge_id += 1;
                     }
                 }
                 
-                // TODO: names necessary? These nodes are added after graphml is created, because this is executed in execute_pepgm. The names are not contained in any output I think. For the algorithm itself, strings are inefficient
-                let new_node_name = format!("CTree {}", prot_names.join(" "));
-                let new_node_id = next_node_id;
-                let new_node = Node::new_convolution_node(new_node_id, new_node_name, prot_ids.len() as i32);
-                next_node_id += 1;
-                nodes_to_add.push(new_node);
-
-                // Create edge, set node_in_node_id's to 0, we will set them correctly later
-                let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: node.get_id(), node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: Some(prot_ids.len() as i32 + 1) };
-                next_edge_id += 1;
-                edges_to_add.push(edge);
-                for neighbor_id in prot_ids {
-                    // Create edge, set node_in_node_id's to 0, we will set them correctly later
-                    let edge = Edge { id: next_edge_id, node1_id: new_node_id, node2_id: neighbor_id, node1_in_node2_id: 0, node2_in_node1_id: 0, message_length: None };
-                    next_edge_id += 1;
-                    edges_to_add.push(edge);
-                    edges_to_remove.insert((node.get_id(), neighbor_id));
-                    edges_to_remove.insert((neighbor_id, node.get_id()));
-                }
-                
             }
         }
 
-        let mut new_edges: Vec<Edge> = Vec::with_capacity(self.edges.len() + edges_to_add.len() - edges_to_remove.len());
-        let mut next_edge_id = 0;
-        // Add new edges, make sure the Factor - CT edges are first
-        for edge in edges_to_add {
-            let mut new_edge = edge.clone();
-            new_edge.id = next_edge_id;
-            next_edge_id += 1;
-            new_edges.push(new_edge);
-        }
-        // Remove edges
-        for edge in &self.edges {
-            if ! edges_to_remove.contains(&(edge.node1_id, edge.node2_id)) {
-                let mut new_edge = edge.clone();
-                new_edge.id = next_edge_id;
-                next_edge_id += 1;
-                new_edges.push(new_edge);
-            }
-        }
-
-        // Update the incident edges in the nodes
-        let mut new_nodes: Vec<Node> = Vec::with_capacity(self.nodes.len() + nodes_to_add.len());
-        for node in &self.nodes {
-            new_nodes.push(Node::new(node.get_id(), node.get_name().to_string(), node.get_subtype().clone()));
-        }
-        for node in nodes_to_add {
-            new_nodes.push(node);
+        // Clear the incident edges of each node, and refill in the next step
+        for node in &mut new_nodes {
+            node.set_incident_edges(Vec::new());
         }
         
         for edge in &mut new_edges {

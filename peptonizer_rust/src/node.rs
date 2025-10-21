@@ -189,7 +189,7 @@ impl Node {
             let degree: i32 = parent_number;
 
             let mut cpd_array: Vec<[f64; 2]> = Vec::with_capacity(degree as usize + 1);
-            let mut cpd_array_regularized = cpd_array.clone();
+            let mut cpd_array_regularized = Vec::with_capacity(degree as usize + 1);
             let exponent_array: Vec<i32> = (0..=degree).collect();
             let divide_array: Vec<f64> = std::iter::once(1i32).chain(1..=degree).map(|x| x as f64).collect();
             
