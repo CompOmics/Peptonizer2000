@@ -33,10 +33,10 @@ pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeig
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_reader(taxa_weights_csv.as_bytes());
-    
-    let mut taxa_weights = Vec::with_capacity(rdr.records().count());
+
+    let mut taxa_weights = Vec::new();
     for record in rdr.deserialize() {
-        let row: TaxonWeight = record?;
+        let row: TaxonWeight = record.unwrap();
         taxa_weights.push(row);
     }
 

@@ -308,8 +308,7 @@ impl Messages {
 
         // keep track of the nodes of which the incoming messages have changed
         let mut prev_changed: Vec<usize> = (0..self.msg_in.len()).collect();
-
-        while k < max_loops && max_residual > tolerance {
+        while k < max_loops && max_residual > tolerance && ! self.priorities.is_empty() {
 
             // actual zero-look-ahead-BP part
             let ((end_id, start_in_end_id), max_residual) = self.get_highest_priority()?;
@@ -464,17 +463,11 @@ impl Messages {
         let node_belief: [f64; 2] = self.current_beliefs[start_id].variable_values().expect("Start node belief should be a TaxonBelief or PeptideBelief");
 
         if self.msg_in[start_id].get_message_count() <= 1 {
-            // TODO: check in Python code the idea of the any statement (ask Tanja)
-            let (_, start_in_end_id): (usize, usize) = self.graph.get_neighbor_node_and_neighbor_id(start_node, end_in_start_id);
-            if node_belief == get_initial_belief(start_node).variable_values().expect("Start node belief should be a TaxonBelief or PeptideBelief") { 
-                return node_belief; 
-            } else { 
-                return self.msg_in[end_id].get_message(start_in_end_id);
-            }
+            // TODO: There was an if case that was always true, because current_beliefs only updated after 
+            return node_belief;
         }
 
         // Sum of incoming messages, need for logs to prevent underflow in very large multiplications
-        // let sum_logs: [f64; 2] = self.msg_in[start_id].get_messages().into_iter().fold([0.0; 2], |mut acc, row| {acc[0] += ln_from_table(row[0]); acc[1] += ln_from_table(row[1]); acc});
         let sum_logs: [f64; 2] = sum_logs_batched(self.msg_in[start_id].get_messages());
 
         // Compute final log-normalized message, Log transform node_belief
@@ -607,17 +600,6 @@ impl Messages {
             let msg1 = self.msg_in[end_id].get_ct_message().unwrap();
             let msg2 = self.msg_in_log[end_id].get_ct_message().unwrap();
 
-            if msg1.len() != msg2.len() {
-                println!("msg length mismatch!!");
-            }
-
-            for i in 0..msg1.len() {
-                if msg1[i] < 1e-30 {
-                    println!("Do not remove avoid underflow");
-                }
-            }
-            // avoid_underflow(msg1);
-
             let residual = msg1.iter()
                             .zip(msg2.iter())
                             .map(|(m1, m2)| (m1 / m2).ln().abs())
@@ -628,14 +610,6 @@ impl Messages {
 
         let msg1: &mut [f64; 2] = &mut self.msg_in[end_id].get_message(start_in_end_id);
         let msg2: &[f64; 2] = &self.msg_in_log[end_id].get_message(start_in_end_id);
-
-        for i in 0..2 {
-            if msg1[i] < 1e-30 {
-                println!("Do not remove avoid underflow");
-            }
-        }
-
-        // avoid_underflow_arr(msg1);
 
         (msg1[0] / msg2[0]).max(msg1[1] / msg2[1]).ln().abs()
     }
@@ -679,13 +653,12 @@ impl Messages {
         for i in 0..end_node.neighbors_count() {
             let (neighbor_id, end_in_neighbor_id) = self.graph.get_neighbor_node_and_neighbor_id(&end_node, i);
             if neighbor_id != start_id {
-                let neighbor_node = self.graph.get_node(neighbor_id);
                 let priority: f64 = self.graph
                     .get_neighbors(end_node)
                     .enumerate()
                     .map(|(j, sum_run)| {
                         if sum_run != neighbor_id { 
-                            self.total_residuals[end_id][j][i] 
+                            self.total_residuals[end_id][j][i]
                         } else { 
                             0.0
                         }
