@@ -715,13 +715,13 @@ mod tests {
         );
         nodes.push(taxon_node_1);
 
-        let edge0 = Edge::new(0, 0, 1, None);
+        let edge0 = Edge::new(0, 0, 1, 0, 0, None);
         nodes[0].add_incident_edge(0);
         nodes[1].add_incident_edge(0);
         edges.push(edge0);
 
 
-        let edge1 = Edge::new(1, 1, 2, None);
+        let edge1 = Edge::new(1, 1, 2, 0, 1, None);
         nodes[1].add_incident_edge(1);
         nodes[2].add_incident_edge(1);
         edges.push(edge1);
@@ -793,7 +793,7 @@ mod tests {
         assert_eq!(pb.values(), vec![0.1,0.9]);
         let fb = NodeBelief::FactorBelief(vec![[0.2,0.8]]);
         assert_eq!(fb.values(), vec![0.2,0.8]);
-        assert_eq!(fb.factor_values(), Some(vec![[0.2,0.8]]));
+        assert_eq!(fb.factor_values(), Some(&vec![[0.2,0.8]]));
         let tb = NodeBelief::TaxonBelief(0.3,0.7);
         assert_eq!(tb.values(), vec![0.3,0.7]);
         let cb = NodeBelief::ConvolutionTreeBelief;
@@ -805,6 +805,9 @@ mod tests {
         let graph = create_minimal_graph();
         let mut messages = Messages::new(graph);
         let beliefs = messages.zero_lookahead_bp(5,1e-6);
+        assert!(beliefs.is_ok());
+        let beliefs = beliefs.unwrap();
+
         assert_eq!(beliefs[0].len(),2);
         assert_eq!(beliefs[2].len(),2);
         let sum: f64 = beliefs[0].iter().sum();
@@ -816,8 +819,8 @@ mod tests {
         let graph = create_minimal_graph();
         let mut messages = Messages::new(graph);
         let msg = messages.compute_out_message_variable(0,1,0);
-        assert_eq!(msg.len(),2);
-        let s: f64 = msg.iter().sum();
+
+        let s: f64 = msg[0] + msg[1];
         assert!((s-1.0).abs()<1e-6);
     }
 
@@ -826,8 +829,10 @@ mod tests {
         let graph = create_minimal_graph();
         let mut messages = Messages::new(graph);
         let msg = messages.compute_out_message_factor(1,2,0);
-        assert_eq!(msg.len(),2);
-        let s: f64 = msg.iter().sum();
+        assert!(msg.is_ok());
+        let msg = msg.unwrap();
+
+        let s: f64 = msg[0] + msg[1];
         assert!((s-1.0).abs()<1e-6);
     }
 
@@ -847,7 +852,7 @@ mod tests {
         let mut messages = Messages::new(graph);
         for node_id in 0..6 {
             for neighbor_id in 0..2 {
-                messages.priorities.push((node_id, neighbor_id), 0.1);
+                messages.priorities.push((node_id, neighbor_id), OrderedFloat(0.1));
             }
         }
         messages.compute_priority(0,2,0);

@@ -52,6 +52,8 @@ mod tests {
         let taxon_query = serde_json::to_string(&vec![2]).unwrap();
 
         let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query);
+        assert!(result.is_ok());
+        let result = result.unwrap();
 
         let parsed: Value = serde_json::from_str(&result).unwrap();
         assert!(parsed.is_object());
@@ -65,6 +67,8 @@ mod tests {
         let taxon_query = "[]".to_string();
 
         let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query);
+        assert!(result.is_ok());
+        let result = result.unwrap();
 
         let parsed: Value = serde_json::from_str(&result).unwrap();
         assert!(parsed.is_object());

@@ -349,7 +349,7 @@ mod tests {
             id,
             format!("factor_{}", id),
             NodeType::FactorNode {
-                parent_number,
+                parent_number: parent_number as u32,
                 initial_belief: Factor { array: vec![], array_labels: vec![] },
             },
         )
@@ -386,9 +386,11 @@ mod tests {
         node.add_incident_edge(5);
         assert_eq!(node.neighbors_count(), 1);
         assert_eq!(node.get_incident_edge(0), 5);
-        assert_eq!(node.get_incident_edges(), &vec![5]);
-        node.set_incident_edges(vec![7, 8]);
-        assert_eq!(node.get_incident_edges(), &vec![7, 8]);
+        let incident_edges: Vec<usize> = node.get_incident_edges().collect();
+        assert_eq!(incident_edges, vec![5usize]);
+        node.set_incident_edges(vec![7, 8].into_iter());
+        let incident_edges: Vec<usize> = node.get_incident_edges().collect();
+        assert_eq!(incident_edges, vec![7usize, 8usize]);
     }
 
     #[test]
@@ -436,7 +438,10 @@ mod tests {
     fn test_parse_data() {
         let xml: &str = r#"<data xmlns="ns" key="d0">0.5</data>"#;
         let elem: Element = xml.parse().unwrap();
-        let (k, v) = Node::parse_data(&elem);
+        let node_data = Node::parse_data(&elem);
+        assert!(node_data.is_ok());
+        let (k, v) = node_data.unwrap();
+
         assert_eq!(k, "d0");
         assert_eq!(v, "0.5");
     }
@@ -458,6 +463,9 @@ mod tests {
     fn test_to_graphml() {
         let node = Node::new(1, "pepx".into(), NodeType::PeptideNode { initial_belief_0: 0.4, initial_belief_1: 0.6 });
         let xml = node.to_graphml();
+        assert!(xml.is_ok());
+        let xml = xml.unwrap();
+
         assert!(xml.contains("<node id=\"pepx\">"));
         assert!(xml.contains("<data key=\"d2\">peptide</data>"));
     }

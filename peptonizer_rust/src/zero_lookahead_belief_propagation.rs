@@ -179,6 +179,8 @@ mod tests {
         let results = vec![vec![0.3, 0.7], vec![0.6, 0.4]];
 
         let csv = generate_csv(node_names, node_types, results);
+        assert!(csv.is_ok());
+        let csv = csv.unwrap();
 
         assert!(csv.contains("n1"));
         assert!(csv.contains("0.7"));
@@ -189,6 +191,8 @@ mod tests {
     fn test_parse_taxon_scores_basic() {
         let csv_content = "123,0.8,taxon\n456,0.5,taxon\n789,0.9,peptide\n".to_string();
         let json = parse_taxon_scores(csv_content);
+        assert!(json.is_ok());
+        let json = json.unwrap();
 
         let parsed: HashMap<usize, f64> = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.get(&456), Some(&0.5));
@@ -198,7 +202,10 @@ mod tests {
 
     #[test]
     fn test_calibrate_all_subgraphs_empty() {
-        let (names, cats, results) = calibrate_all_subgraphs(vec![], 10, 1e-6);
+        let res = calibrate_all_subgraphs(vec![], 10, 1e-6);
+        assert!(res.is_ok());
+        let (names, cats, results) = res.unwrap();
+
         assert!(names.is_empty());
         assert!(cats.is_empty());
         assert!(results.is_empty());
@@ -217,9 +224,8 @@ mod tests {
                     <data key="d2">peptide</data>
                 </node>
                 <node id="n1">
-                    <data key="d0">0.0010000000000000009</data>
-                    <data key="d1">0.999</data>
-                    <data key="d2">peptide</data>
+                    <data key="d2">factor</data>
+                    <data key="d3">2</data>
                 </node>
                 <node id="n2">
                     <data key="d2">taxon</data>
@@ -239,6 +245,9 @@ mod tests {
             10,    // max_iter
             1e-6   // tol
         );
+        assert!(csv.is_ok());
+        let csv = csv.unwrap();
+        println!("{}", csv);
 
         assert!(csv.contains("n0"));
     }

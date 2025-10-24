@@ -167,9 +167,9 @@ mod tests {
 
     #[test]
     fn test_log_normalize_basic() {
-        let mut values = vec![0.0, 0.0];
+        let mut values = [0.0, 0.0];
         log_normalize(&mut values);
-        let sum: f64 = values.iter().sum();
+        let sum: f64 = values[0] + values[1];
         assert!((sum - 1.0).abs() < 1e-12);
     }
 

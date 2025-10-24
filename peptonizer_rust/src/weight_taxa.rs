@@ -255,13 +255,15 @@ mod tests {
         let max_taxa = 10;
         let taxa_rank = "species".to_string();
 
-        let (seq_csv, taxa_csv) = perform_taxa_weighing(
+        let csvs = perform_taxa_weighing(
             pep_taxa_json,
             pep_scores_json,
             pep_psm_counts_json,
             max_taxa,
             taxa_rank
         );
+        assert!(csvs.is_ok());
+        let (seq_csv, taxa_csv) = csvs.unwrap();
 
         assert!(seq_csv.contains("sequence"));
         assert!(seq_csv.contains("PEP1"));
@@ -278,6 +280,8 @@ mod tests {
         let log_weights = vec![0.18, 0.079];
 
         let csv = generate_sequence_csv(None, false, sequences, scores, psms, higher_taxa, weights, log_weights);
+        assert!(csv.is_ok());
+        let csv = csv.unwrap();
         assert!(csv.contains("sequence"));
         assert!(csv.contains("PEP1"));
         assert!(csv.contains("1"));
@@ -294,6 +298,8 @@ mod tests {
         let filter_taxa: HashSet<usize> = vec![11,12].into_iter().collect();
 
         let csv = generate_sequence_csv(Some(filter_taxa), true, sequences, scores, psms, higher_taxa, weights, log_weights);
+        assert!(csv.is_ok());
+        let csv = csv.unwrap();
         assert!(csv.contains("12"));
         assert!(!csv.contains("10")); 
     }
@@ -305,6 +311,8 @@ mod tests {
         let unique_flags = vec![true, false];
 
         let csv = generate_taxa_weights_csv(higher_taxa, weights, unique_flags);
+        assert!(csv.is_ok());
+        let csv = csv.unwrap();
         assert!(csv.contains("higher_taxa"));
         assert!(csv.contains("0")); 
         assert!(csv.contains("true"));
@@ -322,6 +330,9 @@ mod tests {
         let taxa = vec![vec![1], vec![2,3], vec![4]];
         let n = 2;
         let samples = weighted_random_sample(&taxa, n);
+        assert!(samples.is_ok());
+        let samples = samples.unwrap();
+
         assert_eq!(samples.len(), n);
         assert!(samples.iter().all(|&idx| idx < taxa.len()));
     }

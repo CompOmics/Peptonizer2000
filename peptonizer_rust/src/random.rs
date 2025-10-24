@@ -53,6 +53,8 @@ mod tests {
     fn test_basic_sampling() {
         let weights = vec![1.0, 2.0, 3.0];
         let samples = select_random_samples_with_weights(weights.clone(), 2);
+        assert!(samples.is_ok());
+        let samples = samples.unwrap();
 
         assert_eq!(samples.len(), 2);
         for &idx in &samples {
@@ -64,6 +66,8 @@ mod tests {
     fn test_full_sampling() {
         let weights = vec![0.5, 1.5, 2.0];
         let samples = select_random_samples_with_weights(weights.clone(), 3);
+        assert!(samples.is_ok());
+        let samples = samples.unwrap();
 
         // Must return all indices
         assert_eq!(samples, HashSet::from([0, 1, 2]));
@@ -76,6 +80,8 @@ mod tests {
 
         for _ in 0..100 {
             let s = select_random_samples_with_weights(weights.clone(), 1);
+            assert!(s.is_ok());
+            let s = s.unwrap();
             let idx = *s.iter().next().unwrap();
             counts[idx] += 1;
         }

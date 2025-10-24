@@ -343,6 +343,8 @@ mod tests {
         "#;
 
         let parsed = parse_response_json_string(http_response);
+        assert!(parsed.is_ok());
+        let parsed = parsed.unwrap();
 
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].get("taxon_id"), Some(&Some(1)));
@@ -362,6 +364,8 @@ mod tests {
         let target_taxa = vec![1, 2];
         let rank = NCBI_RANKS[1];
         let lineage = get_unique_lineage_at_specified_rank(&target_taxa, rank, &mut lineage_cache);
+        assert!(lineage.is_ok());
+        let lineage = lineage.unwrap();
 
         assert!(lineage.contains(&10));
         assert!(lineage.contains(&20));
@@ -371,6 +375,9 @@ mod tests {
     #[test]
     fn test_get_descendants_for_taxa_structure() {
         let descendants = get_descendants_for_taxa(vec![200, 701], "species".to_string());
+        assert!(descendants.is_ok());
+        let descendants = descendants.unwrap();
+
         assert!(descendants.len() == 4);
     }
 
@@ -389,6 +396,8 @@ mod tests {
     fn test_get_taxa_for_peptides_structure() {
         let peptides = vec!["AAEEAAAA".to_string(), "AAAAEEA".to_string()];
         let result = get_taxa_for_peptides(peptides);
+        assert!(result.is_ok());
+        let result = result.unwrap();
 
         assert_eq!(result.get("AAAAEEA").unwrap().len(), 2);
     }

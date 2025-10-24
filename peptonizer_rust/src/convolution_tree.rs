@@ -251,8 +251,10 @@ mod tests {
     #[test]
     fn test_convolution_tree_message_to_variable() {
         let shared = vec![0.5, 0.5];
-        let proteins = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let proteins = vec![[1.0, 0.0], [0.0, 1.0]];
         let tree = ConvolutionTree::new(shared, proteins);
+        assert!(tree.is_ok());
+        let tree = tree.unwrap();
 
         let msg = tree.message_to_variable(0);
         assert!((msg.iter().sum::<f64>() - 1.0).abs() < 1e-10);
@@ -261,10 +263,14 @@ mod tests {
     #[test]
     fn test_convolution_tree_message_to_shared_likelihood() {
         let shared = vec![0.5, 0.5];
-        let proteins = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let proteins = vec![[1.0, 0.0], [0.0, 1.0]];
         let tree = ConvolutionTree::new(shared.clone(), proteins);
+        assert!(tree.is_ok());
+        let tree = tree.unwrap();
 
         let msg = tree.message_to_shared_likelihood();
+        assert!(msg.is_ok());
+        let msg = msg.unwrap();
         assert_eq!(msg.len(), tree.n_proteins + 1);
     }
 
