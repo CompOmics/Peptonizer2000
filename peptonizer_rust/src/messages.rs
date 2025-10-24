@@ -54,6 +54,11 @@ impl NodeBelief {
         }
     }
 
+    /// Returns the belief values as a fixed-size array `[f64; 2]` for variable nodes (peptide or taxon).
+    ///
+    /// # Returns
+    /// * `Some([f64; 2])` if the node is a peptide or taxon node.
+    /// * `None` if the node is a factor or convolution tree node.
     pub fn variable_values(&self) -> Option<[f64; 2]> {
         match self {
             NodeBelief::PeptideBelief(a, b) | NodeBelief::TaxonBelief(a, b) => Some([*a, *b]),
@@ -91,6 +96,10 @@ pub enum MessagesInNode {
 
 impl MessagesInNode {
     
+    /// Returns all variable messages stored in the node.
+    ///
+    /// # Returns
+    /// Reference to a vector of `[f64; 2]` messages.
     pub fn get_messages(&self) -> &Vec<[f64;2]> {
         match self {
             MessagesInNode::MessagesInVariable { messages } => messages,
@@ -99,6 +108,11 @@ impl MessagesInNode {
         }
     }
 
+    /// Sets the message for a specific neighbor.
+    ///
+    /// # Arguments
+    /// * `neighbor_index` - Index of the neighbor.
+    /// * `message` - New message to store.
     pub fn set_message(&mut self, neighbor_index: usize, message: [f64; 2]) {
         match self {
             MessagesInNode::MessagesInVariable { messages } => messages[neighbor_index] = message,
@@ -113,6 +127,13 @@ impl MessagesInNode {
         }
     }
 
+    /// Retrieves the message for a specific neighbor.
+    ///
+    /// # Arguments
+    /// * `neighbor_index` - Index of the neighbor.
+    ///
+    /// # Returns
+    /// Message as `[f64; 2]`.
     pub fn get_message(&self, neighbor_index: usize) -> [f64;2] {
         match self {
             MessagesInNode::MessagesInVariable { messages } => messages[neighbor_index],
@@ -127,10 +148,21 @@ impl MessagesInNode {
         }
     }
 
+    /// Returns the number of messages stored in the node.
+    ///
+    /// # Returns
+    /// Message count as `usize`.
     pub fn get_message_count(&self) -> usize {
         self.get_messages().len()
     }
 
+    /// Checks whether a message at a given index is a convolution tree message.
+    ///
+    /// # Arguments
+    /// * `message_index` - Index of the message.
+    ///
+    /// # Returns
+    /// `true` if it is a convolution tree message, `false` otherwise.
     pub fn is_ct_message(&self, message_index: usize) -> bool {
         if message_index != 0 {
             return false;
@@ -142,6 +174,10 @@ impl MessagesInNode {
         }
     }
 
+    /// Retrieves the convolution tree message if it exists.
+    ///
+    /// # Returns
+    /// `Ok(&Vec<f64>)` if message exists, error otherwise.
     pub fn get_ct_message(&self) -> Result<&Vec<f64>, Box<dyn std::error::Error>> {
         match self {
             MessagesInNode::MessagesInCTree { factor_message, .. } => Ok(factor_message),
@@ -155,6 +191,13 @@ impl MessagesInNode {
         }
     }
 
+    /// Sets the convolution tree message.
+    ///
+    /// # Arguments
+    /// * `message` - Message to set.
+    ///
+    /// # Returns
+    /// `Ok(())` on success, error if node type is incompatible.
     pub fn set_ct_message(&mut self, message: Vec<f64>) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             MessagesInNode::MessagesInCTree { factor_message, .. } => {
@@ -263,10 +306,20 @@ impl Messages {
 
     }
 
+    /// Adds a message priority to the scheduling queue.
+    ///
+    /// # Arguments
+    /// * `node_id` - Node ID of the message.
+    /// * `neighbor_id` - Neighbor ID of the message.
+    /// * `priority` - Priority value.
     pub fn push_priority(&mut self, node_id: usize, neighbor_id: usize, priority: f64) {
         self.priorities.push((node_id as u32, neighbor_id as u32), OrderedFloat(priority));
     }
 
+    /// Retrieves the highest priority message from the scheduling queue.
+    ///
+    /// # Returns
+    /// Tuple of `(node_id, neighbor_id)` and priority.
     pub fn get_highest_priority(&self) -> Result<((usize, usize), f64), Box<dyn std::error::Error>> {
         let (&(end_id, start_in_end_id), &residual) = self.priorities.peek().ok_or("Priorities is empty")?;
         Ok(((end_id as usize, start_in_end_id as usize), residual.0))
@@ -454,7 +507,7 @@ impl Messages {
     /// * `end_in_start_id` - Neighbor index of destination in source.
     /// 
     /// # Returns
-    /// Normalized probability vector.
+    /// Normalized probability array.
     fn compute_out_message_variable(&mut self, start_id: usize, end_id: usize, end_in_start_id: usize) -> [f64; 2] {
         
         let start_node = self.graph.get_node(start_id);
@@ -480,7 +533,7 @@ impl Messages {
         out_message_log
     }
 
-    /// Computes outgoing message for factor nodes.
+    /// Computes outgoing message for factor nodes, for edges not going to a ct tree node.
     ///
     /// # Arguments
     /// * `start_id` - ID of source node.
@@ -518,6 +571,15 @@ impl Messages {
         }
     }
 
+    /// Computes outgoing message for factor nodes, for edges going to a ct tree node.
+    ///
+    /// # Arguments
+    /// * `start_id` - ID of source node.
+    /// * `end_id` - ID of destination node.
+    /// * `end_in_start_id` - Neighbor index of destination in source.
+    /// 
+    /// # Returns
+    /// Normalized probability vector.
     fn compute_out_message_factor_ctree(&mut self, start_id: usize, end_id: usize, end_in_start_id: usize) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
         let incoming_messages: &MessagesInNode = &self.msg_in[start_id];
         let node_belief: &Vec<[f64;2]> = self.current_beliefs[start_id].factor_values().ok_or("factor_values called on a NodeBelief which is not a FactorBelief")?;

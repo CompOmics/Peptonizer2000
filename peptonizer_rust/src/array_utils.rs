@@ -6,12 +6,32 @@ const MIN_X: f64 = 1e-10;
 const MAX_X: f64 = 1.0;
 const STEP: f64 = (MAX_X - MIN_X) / (N as f64 - 1.0);
 
+
+/// Approximates the natural logarithm of `x` using a precomputed lookup table.
+///
+/// # Arguments
+/// * `x` - Input value between `MIN_X` and `MAX_X`.
+///
+/// # Returns
+/// * Approximate value of `ln(x)` retrieved from a static lookup table.
 #[inline(always)]
 pub fn ln_from_table(x: f64) -> f64 {
     let idx = ((x - MIN_X) / STEP) as usize;
     LOG_TABLE[idx]
 }
 
+
+/// Computes the sum of logarithms for pairs of values in batches to improve performance.
+///
+/// Each element in `rows` is a `[f64; 2]` pair. The function multiplies elements in
+/// small batches (to minimize floating-point underflow) and applies logarithms to
+/// the products using `ln_from_table`.
+///
+/// # Arguments
+/// * `rows` - A vector of `[f64; 2]` pairs representing numeric data.
+///
+/// # Returns
+/// * `[f64; 2]` where each component is the batched sum of logarithms across the corresponding column.
 pub fn sum_logs_batched(rows: &Vec<[f64; 2]>) -> [f64; 2] {
 
     let mut acc0 = 0.0f64;
@@ -44,6 +64,15 @@ pub fn sum_logs_batched(rows: &Vec<[f64; 2]>) -> [f64; 2] {
     [acc0 + prod0.ln(), acc1 + prod1.ln()]
 }
 
+
+/// Returns a copy of a vector excluding the element at the specified index.
+///
+/// # Arguments
+/// * `v` - Reference to the input vector.
+/// * `idx` - Index of the element to remove.
+///
+/// # Returns
+/// * A new vector containing all elements of `v` except the one at position `idx`.
 pub fn copy_without_index<T: Clone>(v: &Vec<T>, idx: usize) -> Vec<T> {
     let mut out = Vec::with_capacity(v.len() - 1);
     out.extend_from_slice(&v[..idx]);
@@ -137,6 +166,11 @@ pub fn avoid_underflow(array: &mut Vec<f64>) {
     array.iter_mut().for_each(|x| if *x < 1e-30 { *x = 1e-30 });
 }
 
+
+/// Prevents numerical underflow in a fixed-size `[f64; 2]` array by setting a minimum threshold.
+///
+/// # Arguments
+/// * `array` - Mutable reference to a `[f64; 2]` array.
 pub fn avoid_underflow_arr(array: &mut [f64; 2]) {
     for i in 0..2 {
         if array[i] < 1e-30 {

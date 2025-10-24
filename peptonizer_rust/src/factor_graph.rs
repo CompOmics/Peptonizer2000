@@ -99,11 +99,18 @@ impl Edge {
         }
     }
 
-
+    /// Sets the ID of the current node within the context of node2.
+    ///
+    /// # Arguments
+    /// * `id` - The index of this node within the neighbor list of node2.
     pub fn set_node1_in_node2_id(&mut self, id: usize) {
         self.node1_in_node2_id = id as u32;
     }
 
+    /// Sets the ID of the second node within the context of node1.
+    ///
+    /// # Arguments
+    /// * `id` - The index of node2 within the neighbor list of node1.
     pub fn set_node2_in_node1_id(&mut self, id: usize) {
         self.node2_in_node1_id = id as u32;
     }
@@ -128,6 +135,7 @@ impl Edge {
         (self.node1_id as usize, self.node2_id as usize)
     }
 
+    /// Returns both node IDs and their corresponding neighbor indices.
     pub fn get_node_and_neighbor_ids(&self) -> ((usize, usize), (usize, usize)) {
         ((self.node1_id as usize, self.node1_in_node2_id as usize), (self.node2_id as usize, self.node2_in_node1_id as usize))
     }
@@ -137,6 +145,10 @@ impl Edge {
         self.message_length.map(|x| x as usize)
     }
 
+    /// Creates a copy of the current edge with a new unique edge ID.
+    ///
+    /// # Arguments
+    /// * `new_id` - The new edge ID to assign.
     pub fn copy_with_id(&self, new_id: usize) -> Self {
         let mut copy: Edge = self.clone();
         copy.id = new_id as u32;
@@ -218,6 +230,13 @@ impl CTFactorGraph {
         &self.edges
     }
 
+     /// Parses an XML `<edge>` element and extracts its source and target node names.
+    ///
+    /// # Arguments
+    /// * `edge` - A reference to a `minidom::Element` representing an edge in GraphML.
+    ///
+    /// # Returns
+    /// Returns a tuple `(source, target)` representing the IDs of connected nodes.
     fn parse_edge(edge: &Element) -> Result<(String, String), Box<dyn std::error::Error>> {
         let source: String = edge.attr("source").ok_or("Source attribute does not exist in Edge")?.to_string();
         let target: String = edge.attr("target").ok_or("Target attribute does not exist in Edge")?.to_string();
@@ -471,6 +490,14 @@ impl CTFactorGraph {
         if node1_id == node.get_id() { node2_id } else { node1_id }
     }
 
+    /// Returns both the neighboring node ID and the neighbor index of that node.
+    ///
+    /// # Arguments
+    /// * `node` - Reference to the node whose neighbor is queried.
+    /// * `neighbor_id` - The index of the neighbor within the node’s adjacency list.
+    ///
+    /// # Returns
+    /// A tuple `(neighbor_node_id, neighbor_index_in_neighbor)` representing the relationship.
     pub fn get_neighbor_node_and_neighbor_id(&self, node: &Node, neighbor_id: usize) -> (usize, usize) {
         let ((node1_id, node1_in_node2_id), (node2_id, node2_in_node1_id)) = self.edges[node.get_incident_edge(neighbor_id)].get_node_and_neighbor_ids();
         if node1_id == node.get_id() { (node2_id, node1_in_node2_id) } else { (node1_id, node2_in_node1_id) }
@@ -631,6 +658,13 @@ impl CTFactorGraph {
         components
     }
 
+    /// Recursively explores connected nodes to identify all members of a component.
+    ///
+    /// # Arguments
+    /// * `start_id` - The starting node ID for the recursive traversal.
+    /// * `component_ids` - Mutable vector storing all node IDs in the current component.
+    /// * `old_to_new_nodes` - Mapping from original node IDs to new local component IDs.
+    /// * `visited` - A mutable set tracking visited node IDs to avoid revisiting.
     fn find_component_rec(
         &self, 
         start_id: usize, 
