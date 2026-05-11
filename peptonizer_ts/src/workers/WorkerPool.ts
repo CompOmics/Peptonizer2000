@@ -128,21 +128,21 @@ class WorkerPool {
     }
 
     public async generateGraph(
-        taxaWeightsCsv: string
-    ): Promise<string> {
+        sequenceScoresCsv: string
+    ): Promise<Uint8Array> {
         if (this.isCancelled) {
             throw new Error("Workerpool is no longer active. Cancel has been called on this pool before.");
         }
 
         const eventData: GenerateGraphTaskData = {
-            taxaWeightsCsv
+            sequenceScoresCsv
         };
 
         return await this.queue.pushAsync({ queueInput: { task: WorkerTask.GENERATE_GRAPH, input: eventData }, progressListener: undefined });
     }
 
     public async executePepgm(
-        graphXml: string,
+        factor_graph_bytes: Uint8Array,
         alpha: number,
         beta: number,
         prior: number,
@@ -153,7 +153,7 @@ class WorkerPool {
         }
 
         const eventData: ExecutePepgmTaskData = {
-            graphXml,
+            factor_graph_bytes,
             alpha,
             beta,
             prior
@@ -163,7 +163,7 @@ class WorkerPool {
     }
 
     public async clusterTaxa(
-        graphXml: string,
+        sequenceScoresCsv: string,
         taxaWeightsCsv: string,
         similarityThreshold: number = 0.9
     ): Promise<string> {
@@ -172,7 +172,7 @@ class WorkerPool {
         }
 
         const eventData: ClusterTaxaTaskData = {
-            graphXml,
+            sequenceScoresCsv,
             taxaWeightsCsv,
             similarityThreshold
         }
@@ -230,7 +230,7 @@ class WorkerPool {
                 } else if (eventData.task === WorkerTask.PERFORM_TAXA_WEIGHING) {
                     resolve([eventData.output.sequenceScoresCsv, eventData.output.taxaWeightsCsv]);
                 } else if (eventData.task === WorkerTask.GENERATE_GRAPH) {
-                    resolve(eventData.output.graphXml);
+                    resolve(eventData.output.factor_graph_bytes);
                 } else if (eventData.task === WorkerTask.EXECUTE_PEPGM) {
                     const peptonizerResult: PeptonizerResult = new Map();
                     for (const [key, value] of Object.entries(JSON.parse(eventData.output.taxonScoresJson))) {

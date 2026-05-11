@@ -5,6 +5,7 @@ use csv::Writer;
 use serde_json;
 use std::io::Cursor;
 use csv::ReaderBuilder;
+use nori::{load_factor_graph_bytes, zero_lookahead_bp_from_graph_bytes};
 
 
 /// Calibrates multiple subgraphs (connected components) of a factor graph using loopy belief propagation.
@@ -70,27 +71,24 @@ fn calibrate_all_subgraphs(
 /// CSV string with one row per node containing columns:
 /// `[node_name, posterior_probability_1, node_category]`
 pub fn run_belief_propagation(
-    graph: String,
-    alpha: f64,
-    beta: f64,
+    graph_bytes: &Vec<u8>,
+    alpha: f32,
+    beta: f32,
     regularized: bool,
-    prior: f64,
-    max_iter: u32,
-    tol: f64
+    prior: f32,
+    max_iter: Option<u32>,
+    tol: Option<f32>
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let mut ct_factor_graph = CTFactorGraph::from_graphml(&graph)?;
-    ct_factor_graph.fill_in_factors(alpha, beta, regularized);
-    ct_factor_graph.fill_in_priors(prior);
-    ct_factor_graph.add_ct_nodes();
-    let ct_factor_graphs: Vec<CTFactorGraph> = ct_factor_graph.connected_components();
+    let results = zero_lookahead_bp_from_graph_bytes(graph_bytes, alpha, beta, regularized, prior, max_iter, tol).unwrap();
 
-    let (node_names, node_types, results) = calibrate_all_subgraphs(
-        ct_factor_graphs,
-        max_iter,
-        tol
-    )?;
+    let taxon_score_dict: HashMap<String, f32> = results
+        .into_iter()
+        .filter_map(|(key, values)| {
+            values.get(1).map(|&v| (key, v))
+        })
+        .collect();
 
-    Ok(generate_csv(node_names, node_types, results)?)
+    Ok(serde_json::to_string(&taxon_score_dict)?)
 }
 
 

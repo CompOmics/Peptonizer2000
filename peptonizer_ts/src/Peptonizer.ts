@@ -78,7 +78,7 @@ class Peptonizer {
             }
             const [sequenceScoresCsv, taxonWeightsCsv] = taxonWeighingResult;
 
-            const generatedGraph = await this.workerPool.generateGraph(sequenceScoresCsv);
+            const factor_graph_bytes = await this.workerPool.generateGraph(sequenceScoresCsv);
 
             const pepgmPromises: Promise<PeptonizerResult>[] = [];
 
@@ -89,7 +89,7 @@ class Peptonizer {
             console.time("Execution time pepgm total");
             for (const paramSet of parameterSets) {
                 pepgmPromises.push(
-                    this.workerPool.executePepgm(generatedGraph, paramSet.alpha, paramSet.beta, paramSet.prior, progressListener)
+                    this.workerPool.executePepgm(factor_graph_bytes, paramSet.alpha, paramSet.beta, paramSet.prior, progressListener)
                 );
             }
 
@@ -105,7 +105,7 @@ class Peptonizer {
             }
 
             // First compute the clustered taxa weights
-            const clusteredTaxaWeightsCsv = await this.workerPool.clusterTaxa(generatedGraph, taxonWeightsCsv);
+            const clusteredTaxaWeightsCsv = await this.workerPool.clusterTaxa(sequenceScoresCsv, taxonWeightsCsv);
 
             if (this.isCancelled) {
                 return;

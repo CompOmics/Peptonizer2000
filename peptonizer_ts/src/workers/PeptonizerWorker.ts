@@ -142,7 +142,7 @@ async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<P
 async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraphTaskDataResult> {
     console.time("Execution time generating graph");
 
-    const graphXml = generate_pepgm_graph_wasm(data.taxaWeightsCsv);
+    const factor_graph_bytes = generate_pepgm_graph_wasm(data.sequenceScoresCsv);
 
     /*self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
     const graphXml = await self.pyodide.runPythonAsync(generateGraphPythonCode);*/
@@ -150,7 +150,7 @@ async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraph
     console.timeEnd("Execution time generating graph");
 
     return {
-        graphXml
+        factor_graph_bytes
     };
 }
 
@@ -158,7 +158,7 @@ async function generateGraph(data: GenerateGraphTaskData): Promise<GenerateGraph
 async function executePepgm(data: ExecutePepgmTaskData, workerId: number): Promise<ExecutePepgmTaskDataResult> {
     console.time("Execution time PepGM");
 
-    const taxonScoresJson = execute_pepgm_wasm(data.graphXml, data.alpha, data.beta, true, data.prior);
+    const taxonScoresJson = execute_pepgm_wasm(data.factor_graph_bytes, data.alpha, data.beta, true, data.prior);
 
     /*self.pyodide.globals.set('graph', data.graphXml);
     self.pyodide.globals.set('alpha', data.alpha);
@@ -178,7 +178,7 @@ async function executePepgm(data: ExecutePepgmTaskData, workerId: number): Promi
 async function clusterTaxa(data: ClusterTaxaTaskData): Promise<ClusterTaxaTaskDataResult> {
     console.time("Execution time clustering taxa");
 
-    const clusteredTaxaWeightsCsv = cluster_taxa_wasm(data.graphXml, data.taxaWeightsCsv, data.similarityThreshold)
+    const clusteredTaxaWeightsCsv = cluster_taxa_wasm(data.sequenceScoresCsv, data.taxaWeightsCsv, data.similarityThreshold)
 
     /*self.pyodide.globals.set('graph', data.graphXml);
     self.pyodide.globals.set('taxa_weights_csv', data.taxaWeightsCsv);
@@ -203,7 +203,6 @@ async function computeGoodness(data: ComputeGoodnessTaskData): Promise<ComputeGo
 
     const goodness = await self.pyodide.runPythonAsync(computeGoodnessPythonCode);
     */
-    console.log(goodness);
 
     console.timeEnd("Execution time computing goodness");
     return {

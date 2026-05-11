@@ -23,18 +23,18 @@ interface PerformTaxaWeighingTaskData {
 }
 
 interface GenerateGraphTaskData {
-    taxaWeightsCsv: string;
+    sequenceScoresCsv: string;
 }
 
 interface ExecutePepgmTaskData {
-    graphXml: string,
+    factor_graph_bytes: Uint8Array,
     alpha: number,
     beta: number,
     prior: number,
 }
 
 interface ClusterTaxaTaskData {
-    graphXml: string,
+    sequenceScoresCsv: string,
     taxaWeightsCsv: string,
     similarityThreshold: number
 }
@@ -66,7 +66,7 @@ interface PerformTaxaWeighingTaskResult {
 }
 
 interface GenerateGraphTaskDataResult {
-    graphXml: string
+    factor_graph_bytes: Uint8Array
 }
 
 interface ExecutePepgmTaskDataResult {

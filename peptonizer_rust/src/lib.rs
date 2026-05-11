@@ -5,7 +5,7 @@ mod utils;
 mod http_client;
 mod random;
 mod weight_taxa;
-pub mod zero_lookahead_belief_propagation;
+mod zero_lookahead_belief_propagation;
 mod node;
 mod factor_graph;
 mod messages;
@@ -29,7 +29,7 @@ mod wasm {
     use wasm_bindgen::prelude::*;
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
     use crate::weight_taxa::perform_taxa_weighing;
-    use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
+    use crate::zero_lookahead_belief_propagation::run_belief_propagation;
     use crate::factor_graph::generate_graph;
     use crate::taxa_clustering::cluster_taxa;
     use crate::analyse_grid_search::compute_goodness;
@@ -100,8 +100,10 @@ mod wasm {
     /// # Errors
     /// Returns an error if CSV parsing fails or if any error occurs during graph construction.
     #[wasm_bindgen]
-    pub fn generate_pepgm_graph_wasm(taxa_weights_csv: String) -> String {
-        generate_graph(taxa_weights_csv).unwrap()
+    pub fn generate_pepgm_graph_wasm(sequence_scores_csv: String) -> Vec<u8> {
+        let factor_graph_bytes = generate_graph(sequence_scores_csv).unwrap();
+
+        factor_graph_bytes
     }
 
     /// Runs belief propagation on a factor graph provided as a GraphML string.
@@ -126,27 +128,23 @@ mod wasm {
     /// `[node_name, posterior_probability_1, node_category]`
     #[wasm_bindgen]
     pub fn execute_pepgm_wasm(
-        graph: String,
-        alpha: f64,
-        beta: f64,
+        graphs: Vec<u8>,
+        alpha: f32,
+        beta: f32,
         regularized: bool,
-        prior: f64,
+        prior: f32,
         max_iter: Option<u32>,
-        tol: Option<f64>
+        tol: Option<f32>
     ) -> String {
-        console_error_panic_hook::set_once(); // Enable panic logging
-        let max_iter: u32 = max_iter.unwrap_or(10000);
-        let tol: f64 = tol.unwrap_or(0.006);
-        
-        let csv: String = run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap();
+        // console_error_panic_hook::set_once(); // Enable panic logging
 
-        parse_taxon_scores(csv).unwrap()
+        run_belief_propagation(&graphs, alpha, beta, regularized, prior, max_iter, tol).unwrap()
     }
 
     /// Clusters taxa based on peptidome similarity and returns a CSV.
     ///
     /// # Arguments
-    /// * `graph_xml` - GraphML as string.
+    /// * `sequence_scores_csv` - Sequence scores as CSV string.
     /// * `taxa_weights_csv` - Taxa weights as CSV string.
     /// * `similarity_threshold` - Threshold for clustering.
     ///
@@ -157,11 +155,11 @@ mod wasm {
     /// Returns an error if parsing, graph building, or clustering fails.
     #[wasm_bindgen]
     pub fn cluster_taxa_wasm(
-        graph: String,
+        sequence_scores_csv: String,
         taxa_weights_csv: String,
         similarity_threshold: f32
     ) -> String {
-        cluster_taxa(graph, taxa_weights_csv, similarity_threshold).unwrap()
+        cluster_taxa(sequence_scores_csv, taxa_weights_csv, similarity_threshold).unwrap()
     }
 
     /// Computes a "goodness" score for clustering results by combining

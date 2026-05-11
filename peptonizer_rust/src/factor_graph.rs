@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 use std::fmt::Write;
 use csv::ReaderBuilder;
+use nori::load_factor_graph_bytes;
 
 /// Represents a single taxon weight record parsed from a CSV file.
 #[derive(Deserialize)]
@@ -21,7 +22,7 @@ pub struct TaxonWeight {
 /// Parses a CSV string into a vector of `TaxonWeight` structs.
 ///
 /// # Arguments
-/// * `taxa_weights_csv` - A string containing CSV data for taxon weights. The CSV
+/// * `sequence_scores_csv` - A string containing CSV data for taxon weights. The CSV
 ///   must include headers: `id, sequence, score, psms, higher_taxa, weight, log_weight`.
 ///
 /// # Returns
@@ -29,38 +30,103 @@ pub struct TaxonWeight {
 ///
 /// # Errors
 /// Returns an error if the CSV cannot be read, or if any record fails deserialization.
-pub fn parse_taxon_weights_csv(taxa_weights_csv: String) -> Result<Vec<TaxonWeight>, Box<dyn std::error::Error>> {
+pub fn parse_taxon_weights_csv(sequence_scores_csv: String) -> Result<Vec<TaxonWeight>, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_reader(taxa_weights_csv.as_bytes());
+        .from_reader(sequence_scores_csv.as_bytes());
 
-    let mut taxa_weights = Vec::new();
+    let mut sequence_scores = Vec::new();
     for record in rdr.deserialize() {
         let row: TaxonWeight = record.unwrap();
-        taxa_weights.push(row);
+        sequence_scores.push(row);
     }
 
-    Ok(taxa_weights)
+    Ok(sequence_scores)
 }
 
 
 /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
 ///
 /// # Arguments
-/// * `taxa_weights_csv` - A string containing CSV data for taxon weights.
+/// * `sequence_scores_csv` - A string containing CSV data for taxon weights.
 ///
 /// # Returns
 /// Returns a `Result` containing a GraphML string representation of the factor graph.
 ///
 /// # Errors
 /// Returns an error if CSV parsing fails or if any error occurs during graph construction.
-pub fn generate_graph(taxa_weights_csv: String) -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_graph(sequence_scores_csv: String) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
-    let taxa_weights = parse_taxon_weights_csv(taxa_weights_csv)?;
+    let sequence_scores = parse_taxon_weights_csv(sequence_scores_csv)?;
 
-    let graph = CTFactorGraph::from_taxa_weights(taxa_weights);
+    let peptide_taxon_graph = taxon_weights_to_graphml(&sequence_scores);
+    let factor_graph = load_factor_graph_bytes(&peptide_taxon_graph)?;
+    Ok(factor_graph)
+}
 
-    Ok(graph.to_graphml()?)
+pub fn taxon_weights_to_graphml(taxon_weights: &Vec<TaxonWeight>) -> String {
+
+    let mut xml = String::new();
+    xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+    xml.push_str(r#"<graphml xmlns="http://graphml.graphdrawing.org/xmlns">"#);
+    xml.push_str(r#"  <key id="type" for="node"/>"#);
+    xml.push_str(r#"  <key id="belief" for="node"/>"#);
+    xml.push_str(r#"  <graph edgedefault="undirected">"#);
+    
+    // Keep unique sequence nodes
+    let mut seen_sequences = HashSet::new();
+    // Store first score seen for each sequence
+    let mut sequence_scores: HashMap<&str, f32> = HashMap::new();
+
+    for item in taxon_weights {
+        sequence_scores
+            .entry(item.sequence.as_str())
+            .or_insert(item.score);
+    }
+
+    // Sequence nodes
+    for (sequence, score) in &sequence_scores {
+        if seen_sequences.insert(*sequence) {
+            xml.push_str(&format!(
+                r#"    <node id="{}">
+      <data key="type">input</data>
+      <data key="belief">[{}, {}]</data>
+    </node>
+"#,
+                sequence,
+                1.0 - score,
+                score
+            ));
+        }
+    }
+
+    // Taxa nodes
+    let mut seen_taxa = HashSet::new();
+    for item in taxon_weights {
+        if seen_taxa.insert(item.higher_taxa) {
+            xml.push_str(&format!(
+                r#"    <node id="{}">
+      <data key="type">output</data>
+    </node>
+"#,
+                item.higher_taxa
+            ));
+        }
+    }
+
+    // Edges
+    for item in taxon_weights {
+        xml.push_str(&format!(
+            r#"    <edge source="{}" target="{}"/>
+"#,
+            item.sequence,
+            item.higher_taxa
+        ));
+    }
+    xml.push_str("  </graph>\n");
+    xml.push_str("</graphml>\n");
+
+    xml
 }
 
 

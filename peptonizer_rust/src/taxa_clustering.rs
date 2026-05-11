@@ -1,7 +1,7 @@
-use crate::factor_graph::CTFactorGraph;
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize, Deserializer};
 use csv::{ReaderBuilder, WriterBuilder};
+use crate::factor_graph::{parse_taxon_weights_csv, TaxonWeight, CTFactorGraph};
 
 
 
@@ -10,7 +10,7 @@ use csv::{ReaderBuilder, WriterBuilder};
 pub struct Taxon {
     /// Unique identifier of the taxon.
     pub id: usize,
-     /// Identifier of the higher-level taxon it belongs to.
+    /// Identifier of the higher-level taxon it belongs to.
     pub higher_taxa: usize,
     /// Weight of the taxon, scaled for comparison.
     pub scaled_weight: f32,
@@ -129,12 +129,12 @@ pub fn generate_taxa_cluster_csv(taxa: Vec<Taxon>) -> Result<String, Box<dyn std
 ///
 /// # Errors
 /// Returns an error if parsing, graph building, or clustering fails.
-pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_threshold: f32) -> Result<String, Box<dyn std::error::Error>> {
+pub fn cluster_taxa(sequence_scores_csv: String, taxa_weights_csv: String, similarity_threshold: f32) -> Result<String, Box<dyn std::error::Error>> {
 
-    let graph = CTFactorGraph::from_graphml(&graph_xml)?;
+    let sequence_scores = parse_taxon_weights_csv(sequence_scores_csv)?;
     let taxa_weights = parse_taxon_csv(taxa_weights_csv)?;
 
-    let peptidome_dict = get_peptides_per_taxon(&graph)?;
+    let peptidome_dict = get_peptides_per_taxon(&sequence_scores)?;
     let (similarities, taxon_index) = compute_detected_peptidome_similarity(peptidome_dict);
 
     let taxa_weights: Vec<Taxon> = taxa_weights
@@ -188,17 +188,28 @@ pub fn cluster_taxa(graph_xml: String, taxa_weights_csv: String, similarity_thre
 ///
 /// # Errors
 /// Returns an error if node parsing fails.
-fn get_peptides_per_taxon(graph: &CTFactorGraph) -> Result<HashMap<usize, HashSet<usize>>, Box<dyn std::error::Error>> {
+fn get_peptides_per_taxon(taxon_weights: &Vec<TaxonWeight>) -> Result<HashMap<usize, HashSet<usize>>, Box<dyn std::error::Error>> {
     let mut peptidome_dict = HashMap::new();
 
-    for node in graph.get_nodes() {
-        if node.is_taxon_node() {
-            let node_id: usize = String::from(node.get_name()).parse()?;
-            let neighbors: HashSet<usize> = graph.get_neighbors(node)
-                .map(|factor_id| graph.get_peptide_for_factor(factor_id))
-                .collect::<Result<_, _>>()?;
-            peptidome_dict.insert(node_id, neighbors);
-        }
+    // maps unique sequence string -> generated sequence_id
+    let mut sequence_to_id: HashMap<String, usize> = HashMap::new();
+    let mut next_sequence_id = 0usize;
+    for tw in taxon_weights {
+        // get or create sequence_id
+        let sequence_id = match sequence_to_id.get(&tw.sequence) {
+            Some(id) => *id,
+            None => {
+                let id = next_sequence_id;
+                next_sequence_id += 1;
+                sequence_to_id.insert(tw.sequence.clone(), id);
+                id
+            }
+        };
+        // insert sequence_id into higher_taxa set
+        peptidome_dict
+            .entry(tw.higher_taxa)
+            .or_insert_with(HashSet::new)
+            .insert(sequence_id);
     }
 
     Ok(peptidome_dict)
