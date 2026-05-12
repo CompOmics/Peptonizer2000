@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use serde_json;
 
 
 /// Parses peptide data from a TSV string.

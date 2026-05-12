@@ -1,53 +1,9 @@
-use crate::factor_graph::CTFactorGraph;
 use std::collections::HashMap;
-use crate::messages::Messages;
 use csv::Writer;
-use serde_json;
 use std::io::Cursor;
 use csv::ReaderBuilder;
-use nori::{load_factor_graph_bytes, zero_lookahead_bp_from_graph_bytes};
+use nori::zero_lookahead_bp_from_graph_bytes;
 
-
-/// Calibrates multiple subgraphs (connected components) of a factor graph using loopy belief propagation.
-///
-/// # Arguments
-///
-/// * `ct_factor_graphs` - Vector of `CTFactorGraph` objects representing connected subgraphs of the full factor graph.
-/// * `max_iterations` - Maximum number of iterations for message passing in case of non-convergence.
-/// * `tolerance` - Convergence criterion; the maximum allowable change in messages between iterations.
-///
-/// # Returns
-///
-/// Tuple `(node_names, node_categories, results)`:
-/// * `node_names` - Vector of node names in the same order as the belief results.
-/// * `node_categories` - Vector of node types (categories) corresponding to the nodes.
-/// * `results` - Vector of belief distributions for each node; each element is a vector `[P(0), P(1)]`.
-fn calibrate_all_subgraphs(
-    ct_factor_graphs: Vec<CTFactorGraph>,
-    max_iterations: u32,
-    tolerance: f64
-) -> Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>), Box<dyn std::error::Error>>{
-    let mut results: Vec<Vec<f64>> = Vec::new();
-    let mut node_categories: Vec<String> = Vec::new();
-    let mut node_names: Vec<String> = Vec::new();
-
-    for subgraph in ct_factor_graphs {
-        if subgraph.node_count() > 2 {
-
-            subgraph.add_node_names_categories(&mut node_names, &mut node_categories);
-
-            let mut messages = Messages::new(subgraph);
-            let beliefs: Vec<Vec<f64>> = messages.zero_lookahead_bp(
-                max_iterations,
-                tolerance
-            )?;
-
-            results.extend(beliefs);
-        }
-    }
-
-    Ok((node_names, node_categories, results))
-}
 
 
 /// Runs belief propagation on a factor graph provided as a GraphML string.

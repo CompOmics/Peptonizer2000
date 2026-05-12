@@ -6,11 +6,7 @@ mod http_client;
 mod random;
 mod weight_taxa;
 mod zero_lookahead_belief_propagation;
-mod node;
 mod factor_graph;
-mod messages;
-mod convolution_tree;
-mod array_utils;
 mod fetch_unipept_taxa;
 mod unipept_communicator;
 mod taxa_clustering;
@@ -89,10 +85,10 @@ mod wasm {
         Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)])
     }
 
-    /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
+    /// Generates a GraphML representation of a factor graph from a CSV string of sequence scores.
     ///
     /// # Arguments
-    /// * `taxa_weights_csv` - A string containing CSV data for taxon weights.
+    /// * `sequence_scores_csv` - A string containing CSV data for sequence scores.
     ///
     /// # Returns
     /// Returns a `Result` containing a GraphML string representation of the factor graph.
@@ -197,7 +193,6 @@ mod pyo3 {
     use crate::input_parser::{parse_input_peptides, parse_unique_peptides};
     use crate::clean_csv::clean_csv;
     use crate::unipept_communicator::get_names_for_taxa;
-    use serde_json;
 
     extern crate console_error_panic_hook;
 

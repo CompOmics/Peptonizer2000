@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize, Deserializer};
 use csv::{ReaderBuilder, WriterBuilder};
-use crate::factor_graph::{parse_taxon_weights_csv, TaxonWeight, CTFactorGraph};
+use crate::factor_graph::{parse_taxon_weights_csv, TaxonWeight};
 
 
 
