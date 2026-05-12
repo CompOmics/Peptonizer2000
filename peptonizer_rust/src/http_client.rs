@@ -106,7 +106,7 @@ impl HttpClient for PyHttpClient {
         // Handle the result and convert to PyResult
         match result {
             Ok(body) => Ok(body),
-            Err(e) => Err(format!("HTTP POST request failed: {}", e).into()),
+            Err(e) => Err(format!("HTTP POST request failed: {e}").into()),
         }
     }
 }

@@ -18,6 +18,7 @@ use std::collections::HashMap;
 /// # Errors
 /// Returns an error if lines are malformed, scores cannot be parsed,
 /// or the input is otherwise invalid.
+#[allow(clippy::type_complexity)]
 fn parse_peptides(tsv_content: String) -> Result<(HashMap<String, f64>, HashMap<String, usize>), Box<dyn std::error::Error>> {
     let mut peptides_scores: HashMap<String, f64> = HashMap::new();
     let mut peptides_counts: HashMap<String, usize> = HashMap::new();
@@ -30,12 +31,12 @@ fn parse_peptides(tsv_content: String) -> Result<(HashMap<String, f64>, HashMap<
     for line in lines {
         let mut parts = line.split('\t');
         let peptide = parts.next()
-            .ok_or_else(|| format!("Invalid line (missing peptide): {}", line))?
+            .ok_or_else(|| format!("Invalid line (missing peptide): {line}"))?
             .to_string();
         let score_str = parts.next()
-            .ok_or_else(|| format!("Invalid line (missing score): {}", line))?;
+            .ok_or_else(|| format!("Invalid line (missing score): {line}"))?;
         let score: f64 = score_str.parse().map_err(|_| {
-            format!("Invalid line (score not a number): {} (score={})", line, score_str)
+            format!("Invalid line (score not a number): {line} (score={score_str})")
         })?;
 
         // Update counts

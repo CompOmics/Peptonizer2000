@@ -35,7 +35,7 @@ pub struct Taxon {
 ///
 /// # Errors
 /// Returns an error if serialization fails.
-fn vec_to_string<S>(vec: &Vec<usize>, serializer: S) -> Result<S::Ok, S::Error>
+fn vec_to_string<S>(vec: &[usize], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -43,7 +43,7 @@ where
         "[{}]", 
         vec.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
     );
-    serializer.serialize_str(&joined)
+    serializer.serialize_str(joined)
 }
 
 
@@ -174,7 +174,7 @@ pub fn cluster_taxa(sequence_scores_csv: String, taxa_weights_csv: String, simil
         taxon.cluster_members = cluster_members.clone();
     }
 
-    Ok(generate_taxa_cluster_csv(cluster_weight_sorted_taxa)?)
+    generate_taxa_cluster_csv(cluster_weight_sorted_taxa)
 }
 
 
@@ -235,7 +235,7 @@ fn compute_detected_peptidome_similarity(peptidome_dict: HashMap<usize, HashSet<
         for taxon2 in peptidome_keys.clone() {
             let set2 = &peptidome_dict[taxon2];
             let shared = set1.intersection(set2).count();
-            let sim: f32 = if set2.len() == 0 {
+            let sim: f32 = if set2.is_empty() {
                 0.0
             } else {
                 shared as f32 / set2.len() as f32

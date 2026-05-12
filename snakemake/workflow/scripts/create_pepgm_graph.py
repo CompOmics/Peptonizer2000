@@ -17,7 +17,7 @@ parser.add_argument(
     "--out",
     type=str,
     required=True,
-    help="Path to output file where GraphML will be saved.",
+    help="Path to output file where graph bytes will be saved.",
 )
 
 args = parser.parse_args()
@@ -25,7 +25,7 @@ args = parser.parse_args()
 with open(args.sequence_scores_dataframe_file, "r") as f:
     csv_str = f.read()
 
-ct_factor_graph = generate_pepgm_graph_py(csv_str)
+ct_factor_graph_bytes = generate_pepgm_graph_py(csv_str)
 
-with open(args.out, 'w') as graphml_file:
-    graphml_file.write(ct_factor_graph)
+with open(args.out, 'wb') as graphml_file:
+    graphml_file.write(ct_factor_graph_bytes)

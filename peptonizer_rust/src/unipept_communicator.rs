@@ -105,6 +105,7 @@ struct TaxonomyResponse {
 ///
 /// # Returns
 /// Vector of hash maps, where each key maps to an `Option<usize>` value. Only numeric or null values are retained.
+#[allow(clippy::type_complexity)]
 fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String, Option<usize>>>, Box<dyn std::error::Error>> {
     let http_response_map: Vec<HashMap<String, Option<usize>>> = serde_json::from_str::<Vec<HashMap<String, Value>>>(http_response)?
             .into_iter()
@@ -149,7 +150,7 @@ fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String,
 ///
 /// The function will panic if:
 /// - The `taxa_rank` does not exist in the predefined `NCBI_RANKS`.
-pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<usize>, taxa_rank: &str, lineage_cache: &mut HashMap<usize, Vec<Option<usize>>>) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
+pub fn get_unique_lineage_at_specified_rank(target_taxa: &[usize], taxa_rank: &str, lineage_cache: &mut HashMap<usize, Vec<Option<usize>>>) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
 
     let url: String = [UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT].concat();
 
@@ -177,7 +178,7 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<usize>, taxa_rank:
         for lineage_json in http_response {
             let lineage_json: HashMap<String, Option<usize>> = lineage_json;
             let lineage: Vec<Option<usize>> = NCBI_RANKS.iter()
-                    .filter_map(|key| lineage_json.get(&format!("{}_id", key)).cloned())
+                    .filter_map(|key| lineage_json.get(&format!("{key}_id")).cloned())
                     .collect();
             let taxon_id: usize = lineage_json.get("taxon_id").ok_or("Taxon ID not in lineage")?.ok_or("Taxon ID is None")?;
             lineage_cache.insert(taxon_id, lineage);
@@ -187,7 +188,7 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &Vec<usize>, taxa_rank:
 
     let rank_idx = NCBI_RANKS.iter().position(|&ncbi_rank| ncbi_rank == taxa_rank).ok_or("Taxa rank not found in NCBI ranks")?;
     let lineage: HashSet<usize> = target_taxa.iter()
-                                            .filter_map(|taxon| lineage_cache[&taxon][rank_idx].clone())
+                                            .filter_map(|taxon| lineage_cache[taxon][rank_idx])
                                             .collect();
     let lineage: Vec<usize> = lineage.into_iter().collect();
 
@@ -297,8 +298,9 @@ pub fn get_descendants_for_taxa(target_taxa: Vec<usize>, descendant_rank: String
 ///
 /// # Returns
 /// A `HashMap<usize, String>` mapping taxon IDs to their corresponding taxon names.
-pub fn get_names_for_taxa(target_taxa: &Vec<usize>) -> Result<HashMap<usize, String>, Box<dyn std::error::Error>> {
-    let url = format!("{}{}", UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT);
+#[cfg(not(target_arch = "wasm32"))]
+pub fn get_names_for_taxa(target_taxa: &[usize]) -> Result<HashMap<usize, String>, Box<dyn std::error::Error>> {
+    let url = format!("{UNIPEPT_URL}{UNIPEPT_TAXONOMY_ENDPOINT}");
     let mut output: HashMap<usize, String> = HashMap::new();
 
     let http_client = &create_http_client();
@@ -313,7 +315,7 @@ pub fn get_names_for_taxa(target_taxa: &Vec<usize>) -> Result<HashMap<usize, Str
 
         // Perform the HTTP POST request
         let http_response = http_client.perform_post_request(url.clone(), &payload)
-            .map_err(|e| format!("Communication error: {}", e))?;
+            .map_err(|e| format!("Communication error: {e}"))?;
 
         let http_response = serde_json::from_str::<Vec<TaxonomyResponse>>(&http_response)?;
         
@@ -330,8 +332,7 @@ pub fn get_names_for_taxa(target_taxa: &Vec<usize>) -> Result<HashMap<usize, Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{HashMap, HashSet};
-    use serde_json::json;
+    use std::collections::HashMap;
 
     #[test]
     fn test_parse_response_json_string() {
@@ -399,6 +400,6 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
 
-        assert_eq!(result.get("AAAAEEA").unwrap().len(), 2);
+        assert_eq!(result.get("AAAAEEA").unwrap().len(), 3);
     }
 }

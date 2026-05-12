@@ -12,20 +12,11 @@ extern "C" {
     /// Logs a message to the JavaScript console (`console.log`) when running in WASM.
     #[wasm_bindgen(js_namespace = console)]
     pub fn log(s: &str);
-
-    /// Logs an error message to the JavaScript console (`console.error`) when running in WASM.
-    #[wasm_bindgen(js_namespace = console)]
-    pub fn error(s: &str);
 }
 
 /// Logs a message to the console when running natively (non-WASM).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn log(s: &str) {
-    println!("{}", s);
+    println!("{s}");
 }
 
-/// Logs an error message to the console when running natively (non-WASM).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn error(s: &str) {
-    eprintln!("{}", s);
-}

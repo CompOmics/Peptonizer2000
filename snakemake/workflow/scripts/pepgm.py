@@ -8,10 +8,10 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    "--communities-graphml-path",
+    "--communities-graph-bytes-path",
     type=str,
     required=True,
-    help="Path to where the GraphML file of the factor graph (using Louvain communities) is stored.",
+    help="Path to where the binary file of the factor graph (using Louvain communities) is stored.",
 )
 parser.add_argument(
     "--max-iter",
@@ -54,8 +54,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-with open(args.communities_graphml_path, 'r') as in_file:
-    csv_content = execute_pepgm_py(
+with open(args.communities_graph_bytes_path, 'rb') as in_file:
+    json_content = execute_pepgm_py(
         in_file.read(),
         args.alpha,
         args.beta,
@@ -66,4 +66,4 @@ with open(args.communities_graphml_path, 'r') as in_file:
     )
 
     with open(args.out, 'w') as out_file:
-        out_file.write(csv_content)
+        out_file.write(json_content)

@@ -1,8 +1,7 @@
-use crate::unipept_communicator::get_names_for_taxa;
-use std::collections::HashMap;
 use csv::ReaderBuilder;
 use serde::Deserialize;
-
+use crate::unipept_communicator::get_names_for_taxa;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct Row {
@@ -45,7 +44,7 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
     // Collect all taxon IDs for name lookup
     let ids: Vec<usize> = tax_ids.iter().map(|(id, _)| *id).collect();
     let name_mapping: HashMap<usize, String> = get_names_for_taxa(&ids)
-        .map_err(|e| format!("Failed to retrieve taxon names: {}", e))?;
+        .map_err(|e| format!("Failed to retrieve taxon names: {e}"))?;
 
     // Build CSV output
     let mut lines: Vec<String> = Vec::new();
@@ -53,7 +52,7 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
 
     for (id, score) in tax_ids {
         if let Some(name) = name_mapping.get(&id) {
-            lines.push(format!("{},{},{}", name, id, score));
+            lines.push(format!("{name},{id},{score}"));
         }
     }
 
@@ -64,7 +63,6 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_clean_csv_basic() {

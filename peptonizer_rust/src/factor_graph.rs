@@ -6,13 +6,9 @@ use nori::load_factor_graph_bytes;
 /// Represents a single taxon weight record parsed from a CSV file.
 #[derive(Deserialize)]
 pub struct TaxonWeight {
-    pub id: usize,
     pub sequence: String,
     pub score: f32,
-    pub psms: usize,
     pub higher_taxa: usize,
-    pub weight: f32,
-    pub log_weight: f32
 }
 
 
@@ -130,7 +126,6 @@ pub fn taxon_weights_to_graphml(taxon_weights: &Vec<TaxonWeight>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{Node, NodeType, Factor};
 
     fn sample_csv() -> String {
         "id,sequence,score,psms,higher_taxa,weight,log_weight
@@ -145,90 +140,6 @@ mod tests {
         let csv = sample_csv();
         let taxa = parse_taxon_weights_csv(csv).unwrap();
         assert_eq!(taxa.len(), 3);
-        assert_eq!(taxa[0].id, 1);
         assert!((taxa[1].score - 0.6).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_generate_graph_creates_graphml() {
-        let csv = sample_csv();
-        let graphml = generate_graph(csv).unwrap();
-        assert!(graphml.contains("graphml"));
-        assert!(graphml.contains("node"));
-        assert!(graphml.contains("edge"));
-    }
-
-    #[test]
-    fn test_edge_getters() {
-        let edge = Edge::new(1, 10, 20, 0, 0, Some(5));
-        assert_eq!(edge.get_id(), 1);
-        assert_eq!(edge.get_node1_id(), 10);
-        assert_eq!(edge.get_node2_id(), 20);
-        assert_eq!(edge.get_node_ids(), (10, 20));
-        assert_eq!(edge.get_message_length(), Some(5));
-    }
-
-    #[test]
-    fn test_ctfactorgraph_from_taxa_weights() {
-        let csv = sample_csv();
-        let taxa = parse_taxon_weights_csv(csv).unwrap();
-        let graph = CTFactorGraph::from_taxa_weights(taxa);
-        assert!(graph.node_count() > 0);
-        assert!(graph.edge_count() > 0);
-    }
-
-    #[test]
-    fn test_ctfactorgraph_to_and_from_graphml() {
-        let csv = sample_csv();
-        let taxa = parse_taxon_weights_csv(csv).unwrap();
-        let graph = CTFactorGraph::from_taxa_weights(taxa);
-        let graphml = graph.to_graphml();
-        assert!(graphml.is_ok());
-        let graphml = graphml.unwrap();
-
-        let parsed = CTFactorGraph::from_graphml(&graphml).unwrap();
-        assert_eq!(graph.node_count(), parsed.node_count());
-        assert_eq!(graph.edge_count(), parsed.edge_count());
-    }
-
-    #[test]
-    fn test_neighbor_operations() {
-        let csv = sample_csv();
-        let taxa = parse_taxon_weights_csv(csv).unwrap();
-        let graph = CTFactorGraph::from_taxa_weights(taxa);
-
-        if graph.node_count() > 1 {
-            let node = graph.get_node(0);
-            println!("{:?}\n\n{:?}", graph, node);
-            for n in graph.get_neighbors(node) {
-                assert!(n >= 0);
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_peptide_for_factor_returns_ok_or_err() {
-        let csv = sample_csv();
-        let taxa = parse_taxon_weights_csv(csv).unwrap();
-        let graph = CTFactorGraph::from_taxa_weights(taxa);
-
-        for (i, node) in graph.get_nodes().iter().enumerate() {
-            if node.is_factor_node() {
-                let result = graph.get_peptide_for_factor(i);
-                assert!(result.is_ok() || result.is_err());
-            }
-        }
-    }
-
-    #[test]
-    fn test_connected_components() {
-        let csv = sample_csv();
-        let taxa = parse_taxon_weights_csv(csv).unwrap();
-        let graph = CTFactorGraph::from_taxa_weights(taxa);
-
-        let components = graph.connected_components();
-        assert!(!components.is_empty());
-        let total_nodes: usize = components.iter().map(|c| c.node_count()).sum();
-        assert_eq!(total_nodes, graph.node_count());
     }
 }

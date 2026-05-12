@@ -29,9 +29,9 @@ pub fn perform_taxa_weighing(
     log("Parsing Unipept responses from disk...");
     let pep_taxa: HashMap<String, Vec<usize>> = serde_json::from_str(&pep_taxa)?;
 
-    let sequences: Vec<String> = pep_taxa.iter().map(|(seq, _taxa)| seq.to_owned()).collect();
+    let sequences: Vec<String> = pep_taxa.keys().map(|seq| seq.to_owned()).collect();
 
-    let mut taxa: Vec<Vec<usize>> = pep_taxa.into_iter().map(|(_seq, taxa)| taxa).collect();
+    let mut taxa: Vec<Vec<usize>> = pep_taxa.into_values().collect();
     
     log("Started mapping all taxon ids to the specified rank...");
     normalize_unipept_responses(&mut taxa, &taxa_rank)?;
@@ -104,18 +104,17 @@ pub fn perform_taxa_weighing(
     // Group the duplicate entries of higher up taxa and sum their weights
     let higher_taxid_weights = tax_id_weights;
 
-    let higher_taxid_unique: Vec<bool> = tax_ids.iter().map(|id| higher_unique_psm_taxids.contains(&id)).collect();
+    let higher_taxid_unique: Vec<bool> = tax_ids.iter().map(|id| higher_unique_psm_taxids.contains(id)).collect();
 
     // TODO: Why hardcoded < 50
-    let sequence_csv;
-    if higher_taxid_weights.len() < 50 {
-        sequence_csv = generate_sequence_csv(None, false, sequences, pep_scores, pep_psm_counts, higher_taxa, weights, log_weights)?;
+    let sequence_csv = if higher_taxid_weights.len() < 50 {
+        generate_sequence_csv(None, false, sequences, pep_scores, pep_psm_counts, higher_taxa, weights, log_weights)?
     } else {
         let mut taxa_to_include: HashSet<usize> = tax_ids.iter().take(max_taxa).cloned().collect();
         taxa_to_include.extend(higher_unique_psm_taxids);
 
-        sequence_csv = generate_sequence_csv(Some(taxa_to_include), true, sequences, pep_scores, pep_psm_counts, higher_taxa, weights, log_weights)?;
-    }
+        generate_sequence_csv(Some(taxa_to_include), true, sequences, pep_scores, pep_psm_counts, higher_taxa, weights, log_weights)?
+    };
 
     let taxa_weights_csv = generate_taxa_weights_csv(tax_ids, higher_taxid_weights, higher_taxid_unique)?;
 
@@ -139,17 +138,18 @@ pub fn perform_taxa_weighing(
 ///
 /// CSV string containing one row per peptide-taxon pair with columns:
 /// "id", "sequence", "score", "psms", "higher_taxa", "weight", "log_weight".
+#[allow(clippy::too_many_arguments)]
 fn generate_sequence_csv(taxa_to_include: Option<HashSet<usize>>, filter_taxa: bool, sequences: Vec<String>, scores: Vec<f32>, psms: Vec<usize>, higher_taxa: Vec<Vec<usize>>, weights: Vec<f32>, log_weights: Vec<f32>) -> Result<String, Box<dyn std::error::Error>> {
 
     let mut wtr = Writer::from_writer(vec![]);
 
-    let _ = wtr.write_record(&["id", "sequence", "score", "psms", "higher_taxa", "weight", "log_weight"]);
+    let _ = wtr.write_record(["id", "sequence", "score", "psms", "higher_taxa", "weight", "log_weight"]);
 
     let mut id = 0;
     for i in 0..sequences.len() {
         for taxon in &higher_taxa[i] {
-            if (! filter_taxa) || taxa_to_include.as_ref().ok_or("No taxa to include passed while filter_taxa enabled")?.contains(&taxon) {
-                let _ = wtr.write_record(&[
+            if (! filter_taxa) || taxa_to_include.as_ref().ok_or("No taxa to include passed while filter_taxa enabled")?.contains(taxon) {
+                wtr.write_record(&[
                     id.to_string(),
                     sequences[i].clone(), 
                     scores[i].to_string(), 
@@ -182,10 +182,10 @@ fn generate_sequence_csv(taxa_to_include: Option<HashSet<usize>>, filter_taxa: b
 fn generate_taxa_weights_csv(higher_taxa: Vec<usize>, higher_taxid_weights: Vec<f32>, higher_taxid_unique: Vec<bool>) -> Result<String, Box<dyn std::error::Error>> {
     let mut wtr = Writer::from_writer(vec![]);
 
-    let _ = wtr.write_record(&["id", "higher_taxa", "scaled_weight", "unique"]);
+    let _ = wtr.write_record(["id", "higher_taxa", "scaled_weight", "unique"]);
 
     for i in 0..higher_taxa.len() {
-        let _ = wtr.write_record(&[
+        wtr.write_record(&[
             i.to_string(),
             higher_taxa[i].to_string(),
             higher_taxid_weights[i].to_string(),
@@ -205,14 +205,14 @@ fn generate_taxa_weights_csv(higher_taxa: Vec<usize>, higher_taxid_weights: Vec<
 ///
 /// * `taxa` - Mutable reference to a vector of vectors of taxon IDs.
 /// * `taxa_rank` - The desired taxonomic rank to normalize to (e.g., "species").
-fn normalize_unipept_responses(taxa: &mut Vec<Vec<usize>>, taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn normalize_unipept_responses(taxa: &mut [Vec<usize>], taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
     
     // TODO: should we first do get_lineages_for_taxa to limit Unipept calls (see python)?
     let mut lineage_cache: HashMap<usize, Vec<Option<usize>>> = HashMap::new();
 
     // Map all taxa onto the rank specified by the user
-    for i in 0..taxa.len() {
-        taxa[i] = get_unique_lineage_at_specified_rank(&taxa[i], taxa_rank, &mut lineage_cache)?;
+    for taxon in taxa {
+        *taxon = get_unique_lineage_at_specified_rank(taxon, taxa_rank, &mut lineage_cache)?;
     }
 
     Ok(())
@@ -229,12 +229,12 @@ fn normalize_unipept_responses(taxa: &mut Vec<Vec<usize>>, taxa_rank: &str) -> R
 ///
 /// A `HashSet` of selected indices, chosen with probability proportional to
 /// `1 / number_of_taxa_per_peptide`.
-fn weighted_random_sample(taxa: &Vec<Vec<usize>>, n: usize) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
+fn weighted_random_sample(taxa: &[Vec<usize>], n: usize) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
     
     // Calculate normalized weights based on the length of the taxa array
-    let weights: Vec<f64> = taxa.iter().map(|taxon| if taxon.len() == 0 { 0.0 } else { 1.0 / taxon.len() as f64 }).collect();
+    let weights: Vec<f64> = taxa.iter().map(|taxon| if taxon.is_empty() { 0.0 } else { 1.0 / taxon.len() as f64 }).collect();
     let total_weight: f64 = weights.iter().sum();
-    let normalized_weights: Vec<f64> = weights.iter().map(|w| w / total_weight as f64).collect();
+    let normalized_weights: Vec<f64> = weights.iter().map(|w| w / total_weight).collect();
 
     let samples: HashSet<usize> = select_random_samples_with_weights(normalized_weights, n)?;
 
@@ -245,7 +245,7 @@ fn weighted_random_sample(taxa: &Vec<Vec<usize>>, n: usize) -> Result<HashSet<us
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     #[test]
     fn test_perform_taxa_weighing_basic() {
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn test_normalize_unipept_responses_basic() {
         let mut taxa = vec![vec![3000]];
-        normalize_unipept_responses(&mut taxa, "species");
+        let _ = normalize_unipept_responses(&mut taxa, "species");
         assert!(taxa.iter().all(|v| !v.is_empty()));
     }
 

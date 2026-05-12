@@ -11,7 +11,9 @@ mod fetch_unipept_taxa;
 mod unipept_communicator;
 mod taxa_clustering;
 mod analyse_grid_search;
+#[cfg(not(target_arch = "wasm32"))]
 mod input_parser;
+#[cfg(not(target_arch = "wasm32"))]
 mod clean_csv;
 
 #[cfg(target_arch = "wasm32")]
@@ -181,12 +183,14 @@ mod wasm {
 
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[cfg(not(target_arch = "wasm32"))]
 mod pyo3 {
     use pyo3::prelude::*;
+    use pyo3::types::PyBytes;
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
     use crate::weight_taxa::perform_taxa_weighing;
-    use crate::zero_lookahead_belief_propagation::{run_belief_propagation, parse_taxon_scores};
+    use crate::zero_lookahead_belief_propagation::run_belief_propagation;
     use crate::factor_graph::generate_graph;
     use crate::taxa_clustering::cluster_taxa;
     use crate::analyse_grid_search::compute_goodness;
@@ -287,8 +291,10 @@ mod pyo3 {
     /// # Errors
     /// Returns an error if CSV parsing fails or if any error occurs during graph construction.
     #[pyfunction]
-    pub fn generate_pepgm_graph_py(taxa_weights_csv: String) -> String {
-        generate_graph(taxa_weights_csv).unwrap()
+    pub fn generate_pepgm_graph_py(py: Python<'_>, taxa_weights_csv: String) -> Py<PyBytes> {
+        let graph_bytes = generate_graph(taxa_weights_csv).unwrap();
+
+        PyBytes::new_bound(py, &graph_bytes).into()
     }
 
     /// Runs belief propagation on a factor graph provided as a GraphML string.
@@ -312,26 +318,25 @@ mod pyo3 {
     /// CSV string with one row per node containing columns:
     /// `[node_name, posterior_probability_1, node_category]`
     #[pyfunction]
+    #[pyo3(signature = (graph, alpha, beta, regularized, prior, max_iter=None, tol=None))]
     pub fn execute_pepgm_py(
-        graph: String,
-        alpha: f64,
-        beta: f64,
+        graph: Vec<u8>,
+        alpha: f32,
+        beta: f32,
         regularized: bool,
-        prior: f64,
+        prior: f32,
         max_iter: Option<u32>,
-        tol: Option<f64>
+        tol: Option<f32>
     ) -> String {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let max_iter: u32 = max_iter.unwrap_or(10000);
-        let tol: f64 = tol.unwrap_or(0.006);
-        
-        run_belief_propagation(graph, alpha, beta, regularized, prior, max_iter, tol).unwrap()
+
+        run_belief_propagation(&graph, alpha, beta, regularized, prior, max_iter, tol).unwrap()
     }
 
     /// Clusters taxa based on peptidome similarity and returns a CSV.
     ///
     /// # Arguments
-    /// * `graph_xml` - GraphML as string.
+    /// * `sequence_scores_csv` - CSV string containing peptide sequence scores.
     /// * `taxa_weights_csv` - Taxa weights as CSV string.
     /// * `similarity_threshold` - Threshold for clustering.
     ///
@@ -342,11 +347,11 @@ mod pyo3 {
     /// Returns an error if parsing, graph building, or clustering fails.
     #[pyfunction]
     pub fn cluster_taxa_py(
-        graph: String,
+        sequence_scores_csv: String,
         taxa_weights_csv: String,
         similarity_threshold: f32
     ) -> String {
-        cluster_taxa(graph, taxa_weights_csv, similarity_threshold).unwrap()
+        cluster_taxa(sequence_scores_csv, taxa_weights_csv, similarity_threshold).unwrap()
     }
 
     /// Computes a "goodness" score for clustering results by combining
@@ -354,7 +359,7 @@ mod pyo3 {
     /// 
     /// # Arguments
     /// * `clustered_taxa_weights_csv` - CSV string file containing clustered taxa weights.
-    /// * `peptonizer_results_csv` - CSV string containing taxa scores produced by Peptonizer.
+    /// * `peptonizer_results` - JSON string containing taxa scores produced by Peptonizer.
     /// 
     /// # Returns
     /// A `Result<f64, Box<dyn std::error::Error>>` containing the computed goodness score,
@@ -362,13 +367,13 @@ mod pyo3 {
     /// 
     /// # Errors
     /// This function may return an error if the input CSV or JSON cannot be parsed.
+    #[allow(unsafe_op_in_unsafe_fn)]
     #[pyfunction]
     pub fn compute_goodness_py(
         clustered_taxa_weights_csv: String, 
-        peptonizer_results_csv: String
+        peptonizer_results: String
     ) -> f64 {
-        let taxon_scores = parse_taxon_scores(peptonizer_results_csv.clone()).unwrap();
-        compute_goodness(clustered_taxa_weights_csv, taxon_scores).unwrap()
+        compute_goodness(clustered_taxa_weights_csv, peptonizer_results).unwrap()
     }
 
     /// Returns a mapping from taxon ID to taxon name for all taxa provided.
@@ -406,7 +411,7 @@ mod pyo3 {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[pymodule]
-    fn peptonizer_rust(_py: Python, m: &PyModule) -> PyResult<()> {
+    fn peptonizer_rust(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(parse_input_peptides_py, m)?)?;
         m.add_function(wrap_pyfunction!(parse_unique_peptides_py, m)?)?;
         m.add_function(wrap_pyfunction!(fetch_unipept_taxa_py, m)?)?;

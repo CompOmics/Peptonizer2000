@@ -5,9 +5,9 @@ from peptonizer_rust import cluster_taxa_py
 parser = argparse.ArgumentParser(description = 'cluster Taxa based on peptidome similarity and weight attributed')
 
 parser.add_argument(
-    '--full-graphml-path',
+    '--sequence-scores-dataframe-file',
     type = str,
-    help = 'Path(s) to the full Peptonizer graphml file for which you wish to cluster taxa (not containing communities).'
+    help = 'Path to the sequence scores dataframe file.'
 )
 parser.add_argument(
     '--taxa-weights-dataframe-file',
@@ -27,12 +27,12 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-with open(args.full_graphml_path, 'r') as graph_file, open(args.taxa_weights_dataframe_file, 'r') as taxa_weights_file:
-    graph_xml = graph_file.read()
+with open(args.sequence_scores_dataframe_file, 'r') as sequence_scores_file, open(args.taxa_weights_dataframe_file, 'r') as taxa_weights_file:
+    sequence_scores_csv = sequence_scores_file.read()
     taxa_weights_csv = taxa_weights_file.read()
 
 clustered_taxa_csv = cluster_taxa_py(
-    graph_xml,
+    sequence_scores_csv,
     taxa_weights_csv,
     args.similarity_threshold
 )
