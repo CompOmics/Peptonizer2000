@@ -17,21 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          
-          - os: macos-13
-            target: x86_64-apple-darwin
-            
-          - os: macos-latest
-            target: aarch64-apple-darwin
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12"]
 
     runs-on: ${{ matrix.os }}
 
@@ -45,25 +32,21 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: docker/setup-qemu-action@v3
 
       - uses: PyO3/maturin-action@v1
         with:
           command: build
           manylinux: auto
           working-directory: peptonizer_rust
-          args: --release --out dist --target ${{ matrix.target }}
+          args: --release --out dist
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.target }}
+          name: wheels-${{ matrix.os }}
           path: peptonizer_rust/dist/*.whl
 
   commit-wheels:
