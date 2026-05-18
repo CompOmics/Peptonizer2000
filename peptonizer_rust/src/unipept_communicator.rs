@@ -188,7 +188,7 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &[usize], taxa_rank: &s
 
     let rank_idx = NCBI_RANKS.iter().position(|&ncbi_rank| ncbi_rank == taxa_rank).ok_or("Taxa rank not found in NCBI ranks")?;
     let lineage: HashSet<usize> = target_taxa.iter()
-                                            .filter_map(|taxon| lineage_cache[taxon][rank_idx])
+                                            .filter_map(|taxon| lineage_cache.get(taxon).and_then(|lineage| lineage[rank_idx]))
                                             .collect();
     let lineage: Vec<usize> = lineage.into_iter().collect();
 

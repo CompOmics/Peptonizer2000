@@ -15,15 +15,6 @@ export default defineConfig({
             formats: ['es'], // Switch to ESM format,
             filename: "peptonizer.js"
         },
-        rollupOptions: {
-            // Externalize dependencies you don't want to bundle
-            external: ['pyodide'], // Example, add others like 'react' if neededp
-            output: {
-                globals: {
-                    pyodide: 'Pyodide', // Define the global name for external libraries
-                }
-            }
-        },
     },
     plugins: [
         // Use `vite-plugin-dts` for type bundling
@@ -34,5 +25,4 @@ export default defineConfig({
         }),
         wasm(),
     ],
-    optimizeDeps: { exclude: ["pyodide"] }
 });

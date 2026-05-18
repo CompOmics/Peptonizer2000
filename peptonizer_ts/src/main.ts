@@ -5,7 +5,6 @@ import {PeptonizerParameterSet, PeptonizerProgressListener} from "./PeptonizerPr
 import { Peptonizer } from "./Peptonizer.ts";
 import {PeptonizerInputParser} from "./PeptonizerInputParser.ts";
 import {WorkerPool} from "./workers/WorkerPool.ts";
-import { isReadonlyKeywordOrPlusOrMinusToken } from 'typescript';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML= `
   <div id="app">

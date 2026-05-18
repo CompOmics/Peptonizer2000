@@ -23,7 +23,7 @@ use nori::zero_lookahead_bp_from_graph_bytes;
 /// CSV string with one row per node containing columns:
 /// `[node_name, posterior_probability_1, node_category]`
 pub fn run_belief_propagation(
-    graph_bytes: &Vec<u8>,
+    graph_bytes: &[u8],
     alpha: f32,
     beta: f32,
     regularized: bool,
