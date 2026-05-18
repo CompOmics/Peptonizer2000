@@ -2,18 +2,28 @@ name: Build Wheels
 
 on:
   push:
-    branches: [master, rust-wasm]
-  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - 'peptonizer_rust/dist/**'
 
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: peptonizer_rust
 
     steps:
       - uses: actions/checkout@v4
@@ -27,11 +37,42 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist
           manylinux: auto
           working-directory: peptonizer_rust
-      
-      - uses: actions/upload-artifact@v4
+          args: --release --out dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: dist
+          path: peptonizer_rust/dist/*.whl
+
+  commit-wheels:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy wheels into repo
+        run: |
+          mkdir -p peptonizer_rust/dist
+          find artifacts -name "*.whl" -exec cp {} peptonizer_rust/dist/ \;
+
+      - name: Commit wheels
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add -f peptonizer_rust/dist/*.whl
+
+          git commit -m "Update wheels [skip ci]" || echo "Generate wheel files"
+
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
