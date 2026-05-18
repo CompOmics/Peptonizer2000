@@ -49,7 +49,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          mkdir -p peptonizer_rust/dist
-          git add peptonizer_rust/dist/*.whl
+          git add dist/*.whl
           git commit -m "Update wheels for ${{ matrix.os }} [skip ci]" || echo "No changes"
           git push origin HEAD:${GITHUB_REF#refs/heads/}
