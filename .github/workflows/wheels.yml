@@ -55,7 +55,7 @@ jobs:
           command: build
           manylinux: auto
           working-directory: peptonizer_rust
-          args: --release --out dist
+          args: --release --out dist -i python3.12
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
