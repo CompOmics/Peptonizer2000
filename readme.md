@@ -112,8 +112,8 @@ The Peptonizer2000 workflow is comprised of the following steps:
 
 ### Prerequisites
 
-## Python counterpart
-The actual code that builds the factor graph and executes the Peptonizer algorithm, is implemented in Python and can be found in the `peptonizer` folder.
+## Rust implementation
+The core algorithm is implemented in Rust in the `peptonizer_rust` folder. Wheels are created for all major platforms so users can use the package on supported systems.
 
 ### Running as snakemake workflow
 In order to run the Peptonizer2000 on your own system, you should install Conda, Mamba and all of its dependencies.
@@ -126,6 +126,71 @@ Follow the installation instructions step-by-step for an explanation of what you
 * Run `conda activate peptonizer` to switch the current Conda environment to the peptonizer environment you created earlier.
 * Start the peptonizer with the command `snakemake --use-conda --cores 1`. If you have sufficient CPU and memory power available to your system, you can increase the amount of cores in order to speed up the workflow.
 
+If you see the following error while installing dependencies:
+
+```
+ERROR: Could not find a version that satisfies the requirement peptonizer_rust (from versions: none)
+ERROR: No matching distribution found for peptonizer_rust
+```
+
+then the workflow could not find a wheel for `peptonizer_rust` for your platform. To create one manually, expand the instructions below.
+
+<details>
+  <summary>Show manual wheel creation instructions</summary>
+
+  - Change to the Rust package directory:
+
+     ```bash
+     cd peptonizer_rust
+     ```
+
+  - Download the rustup installer:
+
+    ```bash
+    curl -sSf -o rustup-init.sh https://sh.rustup.rs
+    ```
+
+  - Run the installer with defaults:
+
+    ```bash
+    sh rustup-init.sh -y
+    ```
+
+  - Make `cargo` available in this shell session:
+
+    ```bash
+    source "$HOME/.cargo/env"
+    ```
+
+  - Update the Rust toolchain to stable:
+
+    ```bash
+    rustup update
+    ```
+
+  - Install Linux build tools (Debian/Ubuntu example):
+
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y build-essential
+    ```
+
+  - Install `maturin` into the active Conda environment (run after `conda activate peptonizer`):
+
+    ```bash
+    python -m pip install --upgrade pip setuptools wheel
+    python -m pip install maturin
+    ```
+
+  - Build the wheel for Python 3.12 (adjust `-i` if using a different Python):
+
+    ```bash
+    maturin build --release --out dist -i python3.12
+    ```
+
+  The command writes one or more `.whl` files to `peptonizer_rust/dist`.
+
+</details>
 
 ### Configuration file
 
