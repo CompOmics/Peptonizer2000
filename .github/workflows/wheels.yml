@@ -17,10 +17,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.12"]
+        include:
+          - name: linux-x86
+            runs-on: ubuntu-latest
+            python-version: "3.12"
+          - name: windows-x86
+            runs-on: windows-latest
+            python-version: "3.12"
+          - name: macos-arm
+            runs-on: macos-latest
+            python-version: "3.12"
+          - name: macos-x86
+            runs-on: macos-11
+            python-version: "3.12"
+          - name: linux-arm
+            runs-on: ubuntu-22.04
+            python-version: "3.12"
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runs-on }}
 
     defaults:
       run:
@@ -46,7 +60,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.name }}
           path: peptonizer_rust/dist/*.whl
 
   commit-wheels:
