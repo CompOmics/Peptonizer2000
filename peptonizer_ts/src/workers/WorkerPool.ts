@@ -109,7 +109,7 @@ class WorkerPool {
         peptidesTaxa: Map<string, number[]>,
         peptidesScores: Map<string, number>,
         peptidesCounts: Map<string, number>,
-        rank: string,
+        rank: string | undefined,
         taxaInGraph: number,
     ): Promise<[string, string]> {
         if (this.isCancelled) {

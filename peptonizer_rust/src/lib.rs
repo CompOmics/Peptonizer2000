@@ -80,7 +80,7 @@ mod wasm {
         pep_scores: String,
         pep_psm_counts: String,
         max_taxa: usize,
-        taxa_rank: String
+        taxa_rank: Option<String>
     ) -> Box<[JsValue]> {
         console_error_panic_hook::set_once(); // Enable panic logging
         let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap();
@@ -277,7 +277,7 @@ mod pyo3 {
         max_taxa: usize,
         taxa_rank: String
     ) -> (String, String) {
-        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap()
+        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, Some(taxa_rank)).unwrap()
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.

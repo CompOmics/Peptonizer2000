@@ -24,7 +24,7 @@ pub fn perform_taxa_weighing(
     pep_scores: String,
     pep_psm_counts: String,
     max_taxa: usize,
-    taxa_rank: String
+    taxa_rank: Option<String>
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
     log("Parsing Unipept responses from disk...");
     let pep_taxa: HashMap<String, Vec<usize>> = serde_json::from_str(&pep_taxa)?;
@@ -33,8 +33,12 @@ pub fn perform_taxa_weighing(
 
     let mut taxa: Vec<Vec<usize>> = pep_taxa.into_values().collect();
     
-    log("Started mapping all taxon ids to the specified rank...");
-    normalize_unipept_responses(&mut taxa, &taxa_rank)?;
+    if let Some(ref rank) = taxa_rank {
+        log("Started mapping all taxon ids to the specified rank...");
+        normalize_unipept_responses(&mut taxa, rank)?;
+    } else {
+        log("Skipping rank normalization because no rank was provided...");
+    }
     let chosen_idx: HashSet<usize> = weighted_random_sample(&taxa, 10000)?;
 
     log(&format!("Using {} sequences as input...", chosen_idx.len()));
