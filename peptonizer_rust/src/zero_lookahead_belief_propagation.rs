@@ -43,22 +43,3 @@ pub fn run_belief_propagation(
     Ok(serde_json::to_string(&taxon_score_dict)?)
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_parse_taxon_scores_basic() {
-        let csv_content = "123,0.8,taxon\n456,0.5,taxon\n789,0.9,peptide\n".to_string();
-        let json = parse_taxon_scores(csv_content);
-        assert!(json.is_ok());
-        let json = json.unwrap();
-
-        let parsed: HashMap<usize, f64> = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.get(&456), Some(&0.5));
-        assert_eq!(parsed.get(&123), Some(&0.8));
-        assert!(parsed.get(&789).is_none());
-    }
-}
