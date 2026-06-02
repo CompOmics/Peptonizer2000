@@ -45,7 +45,7 @@ async function fetchUnipeptTaxonInformation(data: FetchUnipeptTaxonTaskData): Pr
     let peptidesScores = JSON.stringify(score_keys);
     let taxonQuery = JSON.stringify(data.taxonQuery);
 
-    const unipeptJson = fetch_unipept_taxa_wasm(peptidesScores, data.rank, taxonQuery);
+    const unipeptJson = await fetch_unipept_taxa_wasm(peptidesScores, data.rank, taxonQuery);
     
     console.timeEnd("Execution time fetching Unipept information");
 
@@ -59,7 +59,7 @@ async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<P
     let peptidesScores = JSON.stringify(Object.fromEntries(data.peptidesScores));
     let peptidesCounts = JSON.stringify(Object.fromEntries(data.peptidesCounts));
 
-    const [sequenceScoresCsv, taxaWeightsCsv] = perform_taxa_weighing_wasm(peptidesTaxa, peptidesScores, peptidesCounts, data.taxaInGraph, "species");
+    const [sequenceScoresCsv, taxaWeightsCsv] = await perform_taxa_weighing_wasm(peptidesTaxa, peptidesScores, peptidesCounts, data.taxaInGraph, "species");
 
     console.timeEnd("Execution time taxa weiging");
     return {

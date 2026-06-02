@@ -51,12 +51,14 @@ mod wasm {
     /// # Panics
     /// Panics if input JSON cannot be parsed or if result cannot be serialized.
     #[wasm_bindgen]
-    pub fn fetch_unipept_taxa_wasm(
+    pub async fn fetch_unipept_taxa_wasm(
         peptides: String,
         rank: String,
         taxon_query: String
-    ) -> String {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
+    ) -> Result<String, JsValue> {
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("fetch_unipept_taxa_wasm failed: {e}")))
     }
 
     /// Represents the main pipeline for weighting taxa based on peptide evidence.
@@ -75,16 +77,19 @@ mod wasm {
     /// * `sequence_csv` - CSV string of peptide sequences and their weights.
     /// * `taxa_weights_csv` - CSV string of taxa weights and uniqueness.
     #[wasm_bindgen]
-    pub fn perform_taxa_weighing_wasm(
+    pub async fn perform_taxa_weighing_wasm(
         pep_taxa: String,
         pep_scores: String,
         pep_psm_counts: String,
         max_taxa: usize,
         taxa_rank: String
-    ) -> Box<[JsValue]> {
+    ) -> Result<Box<[JsValue]>, JsValue> {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap();
-        Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)])
+        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("perform_taxa_weighing_wasm failed: {e}")))?;
+
+        Ok(Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)]))
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of sequence scores.
@@ -186,6 +191,8 @@ mod wasm {
 #[allow(unsafe_op_in_unsafe_fn)]
 #[cfg(not(target_arch = "wasm32"))]
 mod pyo3 {
+    use std::future::Future;
+    use std::sync::OnceLock;
     use pyo3::prelude::*;
     use pyo3::types::PyBytes;
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
@@ -199,6 +206,24 @@ mod pyo3 {
     use crate::unipept_communicator::get_names_for_taxa;
 
     extern crate console_error_panic_hook;
+
+    fn block_on_binding_future<F>(future: F) -> F::Output
+    where
+        F: Future,
+    {
+        use tokio::runtime::{Builder, Runtime};
+
+        static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+        TOKIO_RUNTIME
+            .get_or_init(|| {
+                Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to initialize Tokio runtime for Python bindings")
+            })
+            .block_on(future)
+    }
 
     /// Parses peptides from a TSV string and returns JSON representations
     /// of scores and counts.
@@ -251,7 +276,7 @@ mod pyo3 {
         rank: String,
         taxon_query: String
     ) -> String {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
+        block_on_binding_future(fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)).unwrap()
     }
 
     /// Represents the main pipeline for weighting taxa based on peptide evidence.
@@ -277,7 +302,7 @@ mod pyo3 {
         max_taxa: usize,
         taxa_rank: String
     ) -> (String, String) {
-        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap()
+        block_on_binding_future(perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank)).unwrap()
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
@@ -389,7 +414,7 @@ mod pyo3 {
     /// A JSON string mapping taxon IDs to their corresponding taxon names.
     #[pyfunction]
     pub fn get_names_for_taxa_py(target_taxa: Vec<usize>) -> String {
-        let names = get_names_for_taxa(&target_taxa).unwrap();
+        let names = block_on_binding_future(get_names_for_taxa(&target_taxa)).unwrap();
         serde_json::to_string(&names).unwrap()
     }
 
@@ -406,7 +431,7 @@ mod pyo3 {
     /// A `String` containing CSV rows with the columns: `taxon_name,taxon_id,score`.
     #[pyfunction]
     pub fn clean_csv_py(csv_content: String) -> String {
-        clean_csv(csv_content).unwrap()
+        block_on_binding_future(clean_csv(csv_content)).unwrap()
     }
 
     #[cfg(not(target_arch = "wasm32"))]

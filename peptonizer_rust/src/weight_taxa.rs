@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use crate::utils::log;
 use crate::random::select_random_samples_with_weights;
 use csv::Writer;
-use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
+use crate::unipept_communicator::get_unique_lineage_at_specified_rank_async;
 
 /// Represents the main pipeline for weighting taxa based on peptide evidence.
 ///
@@ -19,7 +19,7 @@ use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
 /// Tuple `(sequence_csv, taxa_weights_csv)`:
 /// * `sequence_csv` - CSV string of peptide sequences and their weights.
 /// * `taxa_weights_csv` - CSV string of taxa weights and uniqueness.
-pub fn perform_taxa_weighing(
+pub async fn perform_taxa_weighing(
     pep_taxa: String,
     pep_scores: String,
     pep_psm_counts: String,
@@ -34,7 +34,7 @@ pub fn perform_taxa_weighing(
     let mut taxa: Vec<Vec<usize>> = pep_taxa.into_values().collect();
     
     log("Started mapping all taxon ids to the specified rank...");
-    normalize_unipept_responses(&mut taxa, &taxa_rank)?;
+    normalize_unipept_responses(&mut taxa, &taxa_rank).await?;
     let chosen_idx: HashSet<usize> = weighted_random_sample(&taxa, 10000)?;
 
     log(&format!("Using {} sequences as input...", chosen_idx.len()));
@@ -205,14 +205,16 @@ fn generate_taxa_weights_csv(higher_taxa: Vec<usize>, higher_taxid_weights: Vec<
 ///
 /// * `taxa` - Mutable reference to a vector of vectors of taxon IDs.
 /// * `taxa_rank` - The desired taxonomic rank to normalize to (e.g., "species").
-fn normalize_unipept_responses(taxa: &mut [Vec<usize>], taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn normalize_unipept_responses(taxa: &mut [Vec<usize>], taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
     
     // TODO: should we first do get_lineages_for_taxa to limit Unipept calls (see python)?
     let mut lineage_cache: HashMap<usize, Vec<Option<usize>>> = HashMap::new();
 
     // Map all taxa onto the rank specified by the user
     for taxon in taxa {
-        *taxon = get_unique_lineage_at_specified_rank(taxon, taxa_rank, &mut lineage_cache)?;
+        *taxon = get_unique_lineage_at_specified_rank_async(taxon, taxa_rank, &mut lineage_cache)
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
     }
 
     Ok(())
@@ -247,8 +249,8 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_perform_taxa_weighing_basic() {
+    #[tokio::test]
+    async fn test_perform_taxa_weighing_basic() {
         let pep_taxa_json = r#"{"PEP1":[3000],"PEP2":[3500]}"#.to_string();
         let pep_scores_json = r#"{"PEP1":0.8,"PEP2":0.5}"#.to_string();
         let pep_psm_counts_json = r#"{"PEP1":4,"PEP2":2}"#.to_string();
@@ -261,7 +263,8 @@ mod tests {
             pep_psm_counts_json,
             max_taxa,
             taxa_rank
-        );
+        )
+        .await;
         assert!(csvs.is_ok());
         let (seq_csv, taxa_csv) = csvs.unwrap();
 
@@ -318,10 +321,10 @@ mod tests {
         assert!(csv.contains("true"));
     }
 
-    #[test]
-    fn test_normalize_unipept_responses_basic() {
+    #[tokio::test]
+    async fn test_normalize_unipept_responses_basic() {
         let mut taxa = vec![vec![3000]];
-        let _ = normalize_unipept_responses(&mut taxa, "species");
+        let _ = normalize_unipept_responses(&mut taxa, "species").await;
         assert!(taxa.iter().all(|v| !v.is_empty()));
     }
 

@@ -1,155 +1,126 @@
-use serde::Serialize;
+use std::future::Future;
+use std::pin::Pin;
 
-/// A trait for performing HTTP POST requests with serialized payloads.
-pub trait HttpClient {
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub type HttpResult<T> = Result<T, BoxError>;
+pub type HttpFuture<'a> = Pin<Box<dyn Future<Output = HttpResult<String>> + 'a>>;
 
-    /// Performs an HTTP POST request with a JSON payload.
-    ///
-    /// # Arguments
-    /// * `url` - Target URL for the request.
-    /// * `batch` - Payload to serialize and send as JSON.
-    ///
-    /// # Returns
-    /// Response body as a string on success.
-    ///
-    /// # Errors
-    /// Returns an error string if the request fails or the response cannot be processed.
-    fn perform_post_request<T: Serialize>(&self, url: String, batch: &T) -> Result<String, Box<dyn std::error::Error>>;
+pub struct HttpClient {
+    #[cfg(not(target_arch = "wasm32"))]
+    client: reqwest::Client,
 }
 
-#[cfg(target_arch = "wasm32")]
-pub struct WasmHttpClient;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub struct PyHttpClient;
-
-#[cfg(target_arch = "wasm32")]
-impl HttpClient for WasmHttpClient {
-
-    /// Sends an HTTP POST request in a WebAssembly environment using `XmlHttpRequest`.
-    ///
-    /// # Arguments
-    /// * `url` - Target URL for the request.
-    /// * `payload` - Payload to serialize and send as JSON.
-    ///
-    /// # Returns
-    /// Response body as a string on success.
-    ///
-    /// # Errors
-    /// Returns an error string if request setup, transmission, or response parsing fails.
-    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, Box<dyn std::error::Error>> {
-        use web_sys::{XmlHttpRequest};
-
-        let payload_json = serde_json::to_string(payload)?;
-
-        // Create a new XMLHttpRequest object
-        let xhr = XmlHttpRequest::new().map_err(|e| format!("Failed to create XMLHttpRequest: {:?}", e))?;
-        
-        // Open the request (synchronous mode by setting `async` to false)
-        xhr.open_with_async("POST", &url, false)
-            .map_err(|e| format!("Failed to open request: {:?}", e))?;
-        
-        // Set the request header for JSON
-        xhr.set_request_header("Content-Type", "application/json")
-            .map_err(|e| format!("Failed to set request header: {:?}", e))?;
-        
-        // Send the request with the body
-        xhr.send_with_opt_str(Some(&payload_json))
-            .map_err(|e| format!("Failed to send request: {:?}", e))?;
-        
-        let status = xhr.status().map_err(|_e| format!("Failed to extract status from response"))?;
-        if status == 200 {
-            let response = xhr.response_text()
-            .expect("Expected json in response")
-            .ok_or(format!("Failed to extract text from response"))?;
-        
-            return Ok(format!("{}", response));
+impl HttpClient {
+    pub fn new() -> Self {
+        Self {
+            #[cfg(not(target_arch = "wasm32"))]
+            client: reqwest::Client::new(),
         }
+    }
 
-        Err(format!("Status code {}", status).into())
+    pub fn perform_post_request<'a>(&'a self, url: String, payload_json: String) -> HttpFuture<'a> {
+        Box::pin(async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                use js_sys::{Function, Promise, Reflect, global};
+                use wasm_bindgen::JsCast;
+                use wasm_bindgen_futures::JsFuture;
+                use web_sys::{Request, RequestInit, RequestMode, Response};
+
+                let opts = RequestInit::new();
+                opts.set_method("POST");
+                opts.set_mode(RequestMode::Cors);
+                opts.set_body(&payload_json.into());
+
+                let request = Request::new_with_str_and_init(&url, &opts)
+                    .map_err(|e| format!("Failed to build request: {:?}", e))?;
+                request
+                    .headers()
+                    .set("Content-Type", "application/json")
+                    .map_err(|e| format!("Failed to set request header: {:?}", e))?;
+
+                // Use globalThis.fetch so this works in both Window and Worker contexts.
+                let global_this = global();
+                let fetch_value = Reflect::get(&global_this, &wasm_bindgen::JsValue::from_str("fetch"))
+                    .map_err(|e| format!("Failed to access global fetch function: {:?}", e))?;
+                let fetch_fn: Function = fetch_value.dyn_into().map_err(|_| "globalThis.fetch is not callable")?;
+                let fetch_result = fetch_fn
+                    .call1(&global_this, request.as_ref())
+                    .map_err(|e| format!("Failed to invoke fetch: {:?}", e))?;
+                let fetch_promise: Promise = fetch_result.dyn_into().map_err(|_| "fetch did not return a Promise")?;
+
+                let response = JsFuture::from(fetch_promise)
+                    .await
+                    .map_err(|e| format!("Fetch rejected: {:?}", e))?;
+                let response: Response = response
+                    .dyn_into()
+                    .map_err(|e| format!("Failed to decode fetch response: {:?}", e))?;
+
+                if !response.ok() {
+                    return Err(format!("Status code {}", response.status()).into());
+                }
+
+                let response_text = JsFuture::from(
+                    response
+                        .text()
+                        .map_err(|e| format!("Failed to create response text promise: {:?}", e))?,
+                )
+                .await
+                .map_err(|e| format!("Failed to read response text: {:?}", e))?;
+                return response_text
+                    .as_string()
+                    .ok_or("Response body is not a UTF-8 string".into());
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let response = self
+                    .client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .body(payload_json)
+                    .send()
+                    .await?;
+
+                return Ok(response.text().await?);
+            }
+
+            #[allow(unreachable_code)]
+            Err("Unsupported target architecture".into())
+        })
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl HttpClient for PyHttpClient {
-
-    /// Sends an HTTP POST request in a native environment using `reqwest` and Tokio.
-    ///
-    /// # Arguments
-    /// * `url` - Target URL for the request.
-    /// * `payload` - Payload to serialize and send as JSON.
-    ///
-    /// # Returns
-    /// Response body as a string on success.
-    ///
-    /// # Errors
-    /// Returns an error string if the request fails or the response cannot be processed.
-    fn perform_post_request<T: Serialize>(&self, url: String, payload: &T) -> Result<String, Box<dyn std::error::Error>> {
-        use reqwest::Client;
-        use tokio::runtime::Runtime;
-
-        // Create a Tokio runtime for async execution
-        let rt = Runtime::new()?;
-
-        // Execute the HTTP POST request within the runtime
-        let result = rt.block_on(async {
-            let client = Client::new();
-            let response = client.post(&url)
-                .json(payload)
-                .send()
-                .await?;
-
-            // Get the response body as a string
-            response.text().await
-        });
-        
-        // Handle the result and convert to PyResult
-        match result {
-            Ok(body) => Ok(body),
-            Err(e) => Err(format!("HTTP POST request failed: {e}").into()),
-        }
-    }
+pub fn create_http_client() -> HttpClient {
+    HttpClient::new()
 }
-
-#[cfg(target_arch = "wasm32")]
-/// Creates a new `HttpClient` for WebAssembly targets.
-pub fn create_http_client() -> impl HttpClient {
-    WasmHttpClient
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-/// Creates a new `HttpClient` for native targets.
-pub fn create_http_client() -> impl HttpClient {
-    PyHttpClient
-}
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::Serialize;
     use serde_json::json;
 
-    #[derive(Serialize)]
-    struct DummyPayload {
-        message: String,
-    }
+    #[tokio::test]
+    async fn test_invalid_url_returns_error() {
+        let client = HttpClient::new();
+        let payload = json!({ "message": "hello" });
+        let payload = serde_json::to_string(&payload).unwrap();
 
-    #[test]
-    fn test_invalid_url_returns_error() {
-        let client = PyHttpClient;
-        let payload = DummyPayload { message: "hello".to_string() };
-
-        let result = client.perform_post_request("http://invalid_url".to_string(), &payload);
+        let result = client
+            .perform_post_request("http://invalid_url".to_string(), payload)
+            .await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_real_http_post() {
-        let client = PyHttpClient;
+    #[tokio::test]
+    async fn test_real_http_post() {
+        let client = HttpClient::new();
         let payload = json!({ "foo": "bar" });
+        let payload = serde_json::to_string(&payload).unwrap();
 
-        let result = client.perform_post_request("https://api.unipept.ugent.be".to_string(), &payload);
+        let result = client
+            .perform_post_request("https://api.unipept.ugent.be".to_string(), payload)
+            .await;
         assert!(result.is_ok());
     }
 }

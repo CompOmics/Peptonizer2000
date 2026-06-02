@@ -1,6 +1,7 @@
 use csv::ReaderBuilder;
 use serde::Deserialize;
 use crate::unipept_communicator::get_names_for_taxa;
+use crate::http_client::HttpResult;
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
@@ -21,7 +22,7 @@ struct Row {
 ///
 /// # Returns
 /// A `String` containing CSV rows with the columns: `taxon_name,taxon_id,score`.
-pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn clean_csv(csv_content: String) -> HttpResult<String> {
     // Parse CSV input (without headers)
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
@@ -44,6 +45,7 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
     // Collect all taxon IDs for name lookup
     let ids: Vec<usize> = tax_ids.iter().map(|(id, _)| *id).collect();
     let name_mapping: HashMap<usize, String> = get_names_for_taxa(&ids)
+        .await
         .map_err(|e| format!("Failed to retrieve taxon names: {e}"))?;
 
     // Build CSV output
@@ -64,12 +66,12 @@ pub fn clean_csv(csv_content: String) -> Result<String, Box<dyn std::error::Erro
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_clean_csv_basic() {
+    #[tokio::test]
+    async fn test_clean_csv_basic() {
         // CSV with two taxa and one non-taxon row
         let csv_input = "1,0.5,taxon\n2,0.2,taxon\n3,0.9,other\n".to_string();
 
-        let result = clean_csv(csv_input).unwrap();
+        let result = clean_csv(csv_input).await.unwrap();
         println!("{}", result);
         let expected_lines: Vec<&str> = vec![
             "taxon_name,id,score",
@@ -81,10 +83,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_clean_csv_empty_input() {
+    #[tokio::test]
+    async fn test_clean_csv_empty_input() {
         let csv_input = "".to_string();
-        let result = clean_csv(csv_input);
+        let result = clean_csv(csv_input).await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("taxon_name,id,score"));
