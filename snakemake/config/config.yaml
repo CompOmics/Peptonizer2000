@@ -1,7 +1,7 @@
 # ** Input / output settings **
 
 # Which file should be used as input for the whole pipeline?
-input_file: '../resources/test_files/S03_small.tsv'
+input_file: '../resources/test_files/S03.tsv'
 
 # In which directory should all output (and intermediate) files be stored. This directory is relative to the location of
 # the Snakefile.
