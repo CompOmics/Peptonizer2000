@@ -64,7 +64,7 @@ async function performEffectsWeighing(data: PerformEffectsWeighingTaskData): Pro
         peptidesScores,
         peptidesCounts,
         data.effectsInGraph,
-        data.rank ?? "species"
+        data.rank
     );
 
     console.timeEnd("Execution time effects weiging");

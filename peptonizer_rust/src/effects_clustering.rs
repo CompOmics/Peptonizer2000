@@ -108,7 +108,6 @@ pub fn cluster_effects(sequence_scores_csv: String, effects_weights_csv: String,
         effects_sorted.retain(|&effect| ! cluster_list.contains(&effect));
 
     }
-    log(&format!("cluster heads {:?}", cluster_heads));
 
     let effect_weights_sorted: Vec<Effect> = effects_weights_sorted.into_iter()
         .filter(|tw| cluster_heads.contains(&tw.effect))
