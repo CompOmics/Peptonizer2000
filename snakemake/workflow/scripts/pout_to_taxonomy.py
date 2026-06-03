@@ -10,7 +10,7 @@ parser.add_argument(
     "--taxonomy-query",
     type=str,
     required=True,
-    help="Taxa that should be used to query in Unipept. If querying all taxa, put [1].",
+    help="Effects that should be used to query in Unipept. If querying all effects, put [1].",
 )
 parser.add_argument(
     "--input-file",

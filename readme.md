@@ -19,7 +19,7 @@
 <h3 align="center">The Peptonizer 2000</h3>
 
   <p align="center">
-    Integrating PepGM and Unipept for probability-based taxonomic inference of metaproteomic samples
+    Integrating PepGM and Unipept for probability-based effect inference of metaproteomic samples
     <br />
   </p>
 </div>
@@ -59,7 +59,8 @@
 Introducing the Peptonizer2000 - a tool that combines the capabilities of Unipept and PepGM to analyze
 metaproteomic mass spectrometry-based samples. Originally designed for taxonomic inference of viral
 mass spectrometry-based samples, we've extended PepGM's functionality to analyze metaproteomic samples by
-retrieving taxonomic information from the Unipept database.
+retrieving taxonomic information from the Unipept database. The pipeline can also be used for other peptide-effect 
+relations, such as functional analysis.
 
 PepGM is a probabilistic graphical model developed by Tanja Holstein et al. that uses belief propagation to infer the taxonomic origin of peptides and taxa in viral samples.
 You can learn more about PepGM at [GitHub](https://github.com/BAMeScience/PepGM) page.
@@ -76,15 +77,15 @@ The Peptonizer2000 workflow is comprised of the following steps:
 
 1. Query all identified peptides, provided by the user in a .tsv file, in the Unipept API,
    and restrict the taxonomic range queried based on any prior knowledge of the sample.
-2. Assemble the peptide-taxon associations provided by Unipept into a bipartite graph,
-   where peptides and taxa are represented by different nodes, and an edge is drawn between a peptide and a taxon
-   if the peptide is part of the taxon's proteome.
+2. Assemble the peptide-effect associations provided by Unipept into a bipartite graph,
+   where peptides and effects are represented by different nodes, and an edge is drawn between a peptide and a effect
+   if they are related.
 3. Transform the bipartite graph into a factor graph using convolution trees and conditional probability table
    factors (CPD).
 4. Run the belief propagation algorithm multiple times with different sets of CPD parameters until convergence,
-   to obtain posterior probabilities of candidate taxa.
+   to obtain posterior probabilities of candidate effects.
 5. Use an empirically deduced metric to determine the ideal graph parameter set.
-6. Output the top scoring taxa as a results barchart. The results are also available as comma-separated files
+6. Output the top scoring effects as a results barchart. The results are also available as comma-separated files
    for further downstream analysis or visualizations.
 
 
@@ -209,18 +210,18 @@ Do not change the config file location.
 
    <details > <summary> Analysis specific parameter </summary>
    <ul>
-      <li>taxa_in_graph: # of inferred taxa that appear in the barplot that is created of the results csv</li>
-      <li>taxa_in_plot: number of taxa reported in bar plot</li>
+      <li>effects_in_graph: # of inferred effects that appear in the barplot that is created of the results csv</li>
+      <li>effects_in_plot: number of effects reported in bar plot</li>
       <li>alpha: grid search increments for alpha (list) </li>
       <li>beta: grid search increments for beta (list) </li>
       <li>prior: grid search increments for prior (list) </li>
-      <li>regularized: boolean. If True, the probability for the number of parents taxa of a peptide is regularized to be inversely proportional to the number of parents </li>
+      <li>regularized: boolean. If True, the probability for the number of parents effects of a peptide is regularized to be inversely proportional to the number of parents </li>
    </ul>
    </details>
    <details > <summary> UniPept query parameters </summary>
    <ul>
-       <li>taxon_rank: rank at which results will be reported </li>
-       <li>taxon_query: taxa comprised in the UniPept query. If querying all of Unipept, use 1 (list)</li>
+       <li>effect_rank: rank at which results will be reported </li>
+       <li>effect_query: effects comprised in the UniPept query. If querying all of Unipept, use 1 (list)</li>
    </ul> 
    </details>
 </details>
@@ -232,17 +233,17 @@ All Peptonizer2000 output files are saved into the results folder and include th
 Main results: <br>
 
 - peptonizer_results.csv: table with values ID, score, type (contains all taxids under 'ID' and all probabilities under 'score' <br>
-- peptonizer_results.png: bar plot of the peptonizer results showing the scores for the #'taxa_in_plot' (see config parameters) highest scoring taxa
+- peptonizer_results.png: bar plot of the peptonizer results showing the scores for the #'effects_in_plot' (see config parameters) highest scoring effects
   <br>
 
 Additional files: <br>
 - Intermediate results folders sorted by their prior value for all possible grid search parameter combinations
-- taxa_weights_dataframe.csv: csv file of all taxids that had at least one peptide map to them and their weight 
-- pepgm_graph.graphml: graphml file of the graphical model (without convolution tree factors). Useful to visualize the graph structure and peptide-taxon connections <br>
-- sequence_scores_dataframe.csv: dataframe with petides, taxa and scores used to create the graph <br>
+- effects_weights_dataframe.csv: csv file of all taxids that had at least one peptide map to them and their weight 
+- pepgm_graph.graphml: graphml file of the graphical model (without convolution tree factors). Useful to visualize the graph structure and peptide-effect connections <br>
+- sequence_scores_dataframe.csv: dataframe with petides, effects and scores used to create the graph <br>
 - best_parameter.csv: file with best parameter <br>
 - unipept_responses.json: response of unipept queries <br>
-- clustered_taxa_weights_datatframe: additional .csv file resulting from the clustering of taxa by peptidome used for rbo<br>
+- effect_cluster_heads_dataframe: additional .csv file resulting from the clustering of effects by peptidome used for rbo<br>
 
 
 <p align="right">(<a href="#top">back to top</a>)</p>

@@ -4,12 +4,12 @@ extern crate serde;
 mod utils;
 mod http_client;
 mod random;
-mod weight_taxa;
+mod weight_effects;
 mod zero_lookahead_belief_propagation;
 mod factor_graph;
 mod fetch_unipept_taxa;
 mod unipept_communicator;
-mod taxa_clustering;
+mod effects_clustering;
 mod analyse_grid_search;
 #[cfg(not(target_arch = "wasm32"))]
 mod input_parser;
@@ -26,10 +26,10 @@ pub use pyo3::*;
 mod wasm {
     use wasm_bindgen::prelude::*;
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
-    use crate::weight_taxa::perform_taxa_weighing;
+    use crate::weight_effects::perform_effects_weighing;
     use crate::zero_lookahead_belief_propagation::run_belief_propagation;
     use crate::factor_graph::generate_graph;
-    use crate::taxa_clustering::cluster_taxa;
+    use crate::effects_clustering::cluster_effects;
     use crate::analyse_grid_search::compute_goodness;
 
     extern crate wasm_bindgen;
@@ -59,32 +59,32 @@ mod wasm {
         fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
     }
 
-    /// Represents the main pipeline for weighting taxa based on peptide evidence.
+    /// Represents the main pipeline for weighting effects based on peptide evidence.
     ///
     /// # Arguments
     ///
-    /// * `pep_taxa` - JSON string mapping peptide sequences to lists of taxon IDs.
+    /// * `pep_effects` - JSON string mapping peptide sequences to lists of effect IDs.
     /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
     /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
-    /// * `max_taxa` - Maximum number of taxa to include in output.
-    /// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
+    /// * `max_effects` - Maximum number of effects to include in output.
+    /// * `effects_rank` - The effect rank to normalize effects to (e.g., "species").
     ///
     /// # Returns
     ///
-    /// Tuple `(sequence_csv, taxa_weights_csv)`:
+    /// Tuple `(sequence_csv, effects_weights_csv)`:
     /// * `sequence_csv` - CSV string of peptide sequences and their weights.
-    /// * `taxa_weights_csv` - CSV string of taxa weights and uniqueness.
+    /// * `effects_weights_csv` - CSV string of effects weights and uniqueness.
     #[wasm_bindgen]
-    pub fn perform_taxa_weighing_wasm(
-        pep_taxa: String,
+    pub fn perform_effects_weighing_wasm(
+        pep_effects: String,
         pep_scores: String,
         pep_psm_counts: String,
-        max_taxa: usize,
-        taxa_rank: Option<String>
+        max_effects: usize,
+        effects_rank: Option<String>
     ) -> Box<[JsValue]> {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank).unwrap();
-        Box::new([JsValue::from(sequence_csv), JsValue::from(taxa_weights_csv)])
+        let (sequence_csv, effects_weights_csv): (String, String) = perform_effects_weighing(pep_effects, pep_scores, pep_psm_counts, max_effects, effects_rank).unwrap();
+        Box::new([JsValue::from(sequence_csv), JsValue::from(effects_weights_csv)])
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of sequence scores.
@@ -116,7 +116,7 @@ mod wasm {
     /// * `alpha` - Noisy-OR factor alpha parameter.
     /// * `beta` - Noisy-OR factor beta parameter.
     /// * `regularized` - Whether to regularize factor tables to penalize large numbers of parents.
-    /// * `prior` - Prior belief for taxon nodes.
+    /// * `prior` - Prior belief for effect nodes.
     /// * `max_iter` - Maximum number of belief propagation iterations.
     /// * `tol` - Tolerance threshold for message convergence.
     ///
@@ -139,33 +139,33 @@ mod wasm {
         run_belief_propagation(&graphs, alpha, beta, regularized, prior, max_iter, tol).unwrap()
     }
 
-    /// Clusters taxa based on peptidome similarity and returns a CSV.
+    /// Clusters effects based on peptidome similarity and returns a CSV.
     ///
     /// # Arguments
     /// * `sequence_scores_csv` - Sequence scores as CSV string.
-    /// * `taxa_weights_csv` - Taxa weights as CSV string.
+    /// * `effects_weights_csv` - Effects weights as CSV string.
     /// * `similarity_threshold` - Threshold for clustering.
     ///
     /// # Returns
-    /// CSV string with taxa and their clusters.
+    /// CSV string with effects and their clusters.
     ///
     /// # Errors
     /// Returns an error if parsing, graph building, or clustering fails.
     #[wasm_bindgen]
-    pub fn cluster_taxa_wasm(
+    pub fn cluster_effects_wasm(
         sequence_scores_csv: String,
-        taxa_weights_csv: String,
+        effects_weights_csv: String,
         similarity_threshold: f32
     ) -> String {
-        cluster_taxa(sequence_scores_csv, taxa_weights_csv, similarity_threshold).unwrap()
+        cluster_effects(sequence_scores_csv, effects_weights_csv, similarity_threshold).unwrap()
     }
 
     /// Computes a "goodness" score for clustering results by combining
     /// ranking similarity (via rank-biased overlap) and diversity (via entropy).
     /// 
     /// # Arguments
-    /// * `clustered_taxa_weights_csv` - CSV string file containing clustered taxa weights.
-    /// * `peptonizer_results` - JSON string containing taxa scores produced by Peptonizer.
+    /// * `effect_cluster_heads_csv` - CSV string file containing effect cluster heads.
+    /// * `peptonizer_results` - JSON string containing effects scores produced by Peptonizer.
     /// 
     /// # Returns
     /// A `Result<f64, Box<dyn std::error::Error>>` containing the computed goodness score,
@@ -175,10 +175,10 @@ mod wasm {
     /// This function may return an error if the input CSV or JSON cannot be parsed.
     #[wasm_bindgen]
     pub fn compute_goodness_wasm(
-        clustered_taxa_weights_csv: String, 
+        effect_cluster_heads_csv: String,
         peptonizer_results: String
     ) -> f64 {
-        compute_goodness(clustered_taxa_weights_csv, peptonizer_results).unwrap()
+        compute_goodness(effect_cluster_heads_csv, peptonizer_results).unwrap()
     }
 
 }
@@ -189,10 +189,10 @@ mod pyo3 {
     use pyo3::prelude::*;
     use pyo3::types::PyBytes;
     use crate::fetch_unipept_taxa::fetch_peptides_and_filter_taxa;
-    use crate::weight_taxa::perform_taxa_weighing;
+    use crate::weight_effects::perform_effects_weighing;
     use crate::zero_lookahead_belief_propagation::run_belief_propagation;
     use crate::factor_graph::generate_graph;
-    use crate::taxa_clustering::cluster_taxa;
+    use crate::effects_clustering::cluster_effects;
     use crate::analyse_grid_search::compute_goodness;
     use crate::input_parser::{parse_input_peptides, parse_unique_peptides};
     use crate::clean_csv::clean_csv;
@@ -233,15 +233,15 @@ mod pyo3 {
         parse_unique_peptides(tsv_content).unwrap()
     }
 
-    /// Fetches taxa for peptides and filters them by rank and taxon query.
+    /// Fetches effects for peptides and filters them by rank and effect query.
     ///
     /// # Arguments
     /// * `peptides` - JSON string of peptide sequences.
-    /// * `rank` - Taxonomic rank used for filtering (e.g. "species").
-    /// * `taxon_query` - JSON string of taxon IDs to filter against.
+    /// * `rank` - Effectomic rank used for filtering (e.g. "species").
+    /// * `taxon_query` - JSON string of effect IDs to filter against.
     ///
     /// # Returns
-    /// JSON string mapping peptides to filtered taxon IDs.
+    /// JSON string mapping peptides to filtered effect IDs.
     ///
     /// # Panics
     /// Panics if input JSON cannot be parsed or if result cannot be serialized.
@@ -254,36 +254,36 @@ mod pyo3 {
         fetch_peptides_and_filter_taxa(peptides, rank, taxon_query).unwrap()
     }
 
-    /// Represents the main pipeline for weighting taxa based on peptide evidence.
+    /// Represents the main pipeline for weighting effects based on peptide evidence.
     ///
     /// # Arguments
     ///
-    /// * `pep_taxa` - JSON string mapping peptide sequences to lists of taxon IDs.
+    /// * `pep_effects` - JSON string mapping peptide sequences to lists of effect IDs.
     /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
     /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
-    /// * `max_taxa` - Maximum number of taxa to include in output.
-    /// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
+    /// * `max_effects` - Maximum number of effects to include in output.
+    /// * `effects_rank` - The effect rank to normalize effects to (e.g., "species").
     ///
     /// # Returns
     ///
-    /// Tuple `(sequence_csv, taxa_weights_csv)`:
+    /// Tuple `(sequence_csv, effects_weights_csv)`:
     /// * `sequence_csv` - CSV string of peptide sequences and their weights.
-    /// * `taxa_weights_csv` - CSV string of taxa weights and uniqueness.
+    /// * `effects_weights_csv` - CSV string of effects weights and uniqueness.
     #[pyfunction]
-    fn perform_taxa_weighing_py(
+    fn perform_effects_weighing_py(
         unipept_responses: String,
         pep_scores: String,
         pep_psm_counts: String,
-        max_taxa: usize,
-        taxa_rank: String
+        max_effects: usize,
+        effects_rank: String
     ) -> (String, String) {
-        perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, Some(taxa_rank)).unwrap()
+        perform_effects_weighing(unipept_responses, pep_scores, pep_psm_counts, max_effects, Some(effects_rank)).unwrap()
     }
 
-    /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.
+    /// Generates a GraphML representation of a factor graph from a CSV string of effect weights.
     ///
     /// # Arguments
-    /// * `taxa_weights_csv` - A string containing CSV data for taxon weights.
+    /// * `effects_weights_csv` - A string containing CSV data for effect weights.
     ///
     /// # Returns
     /// Returns a `Result` containing a GraphML string representation of the factor graph.
@@ -291,8 +291,8 @@ mod pyo3 {
     /// # Errors
     /// Returns an error if CSV parsing fails or if any error occurs during graph construction.
     #[pyfunction]
-    pub fn generate_pepgm_graph_py(py: Python<'_>, taxa_weights_csv: String) -> Py<PyBytes> {
-        let graph_bytes = generate_graph(taxa_weights_csv).unwrap();
+    pub fn generate_pepgm_graph_py(py: Python<'_>, effects_weights_csv: String) -> Py<PyBytes> {
+        let graph_bytes = generate_graph(effects_weights_csv).unwrap();
 
         PyBytes::new_bound(py, &graph_bytes).into()
     }
@@ -309,7 +309,7 @@ mod pyo3 {
     /// * `alpha` - Noisy-OR factor alpha parameter.
     /// * `beta` - Noisy-OR factor beta parameter.
     /// * `regularized` - Whether to regularize factor tables to penalize large numbers of parents.
-    /// * `prior` - Prior belief for taxon nodes.
+    /// * `prior` - Prior belief for effect nodes.
     /// * `max_iter` - Maximum number of belief propagation iterations.
     /// * `tol` - Tolerance threshold for message convergence.
     ///
@@ -333,33 +333,33 @@ mod pyo3 {
         run_belief_propagation(&graph, alpha, beta, regularized, prior, max_iter, tol).unwrap()
     }
 
-    /// Clusters taxa based on peptidome similarity and returns a CSV.
+    /// Clusters effects based on peptidome similarity and returns a CSV.
     ///
     /// # Arguments
     /// * `sequence_scores_csv` - CSV string containing peptide sequence scores.
-    /// * `taxa_weights_csv` - Taxa weights as CSV string.
+    /// * `effects_weights_csv` - Effects weights as CSV string.
     /// * `similarity_threshold` - Threshold for clustering.
     ///
     /// # Returns
-    /// CSV string with taxa and their clusters.
+    /// CSV string with effects and their clusters.
     ///
     /// # Errors
     /// Returns an error if parsing, graph building, or clustering fails.
     #[pyfunction]
-    pub fn cluster_taxa_py(
+    pub fn cluster_effects_py(
         sequence_scores_csv: String,
-        taxa_weights_csv: String,
+        effects_weights_csv: String,
         similarity_threshold: f32
     ) -> String {
-        cluster_taxa(sequence_scores_csv, taxa_weights_csv, similarity_threshold).unwrap()
+        cluster_effects(sequence_scores_csv, effects_weights_csv, similarity_threshold).unwrap()
     }
 
     /// Computes a "goodness" score for clustering results by combining
     /// ranking similarity (via rank-biased overlap) and diversity (via entropy).
     /// 
     /// # Arguments
-    /// * `clustered_taxa_weights_csv` - CSV string file containing clustered taxa weights.
-    /// * `peptonizer_results` - JSON string containing taxa scores produced by Peptonizer.
+    /// * `effect_cluster_heads_csv` - CSV string file containing effect cluster heads.
+    /// * `peptonizer_results` - JSON string containing effects scores produced by Peptonizer.
     /// 
     /// # Returns
     /// A `Result<f64, Box<dyn std::error::Error>>` containing the computed goodness score,
@@ -370,40 +370,40 @@ mod pyo3 {
     #[allow(unsafe_op_in_unsafe_fn)]
     #[pyfunction]
     pub fn compute_goodness_py(
-        clustered_taxa_weights_csv: String, 
+        effect_cluster_heads_csv: String,
         peptonizer_results: String
     ) -> f64 {
-        compute_goodness(clustered_taxa_weights_csv, peptonizer_results).unwrap()
+        compute_goodness(effect_cluster_heads_csv, peptonizer_results).unwrap()
     }
 
-    /// Returns a mapping from taxon ID to taxon name for all taxa provided.
+    /// Returns a mapping from effect ID to effect name for all effects provided.
     ///
     /// # Arguments
-    /// * `target_taxa` - A list of taxon IDs for which all corresponding taxon names should be retrieved.
+    /// * `target_effects` - A list of effect IDs for which all corresponding effect names should be retrieved.
     ///
     /// # Errors
     /// Returns an error if the Unipept API server responds with a non-success status code
     /// or if something goes wrong with the network or JSON parsing.
     ///
     /// # Returns
-    /// A JSON string mapping taxon IDs to their corresponding taxon names.
+    /// A JSON string mapping effect IDs to their corresponding effect names.
     #[pyfunction]
-    pub fn get_names_for_taxa_py(target_taxa: Vec<usize>) -> String {
-        let names = get_names_for_taxa(&target_taxa).unwrap();
+    pub fn get_names_for_taxa_py(target_effects: Vec<usize>) -> String {
+        let names = get_names_for_taxa(&target_effects).unwrap();
         serde_json::to_string(&names).unwrap()
     }
 
     /// Read a CSV-file that was produced by the PepGM algorithm and use it to
-    /// produce a new CSV-file that only contains the taxon-related information
+    /// produce a new CSV-file that only contains the effect-related information
     /// and scores. The string produced by this function can be written directly
-    /// to a valid CSV-file and contains three columns: `taxon_name`, `taxon_id`,
+    /// to a valid CSV-file and contains three columns: `effect_name`, `effect_id`,
     /// and `score`.
     ///
     /// # Arguments
     /// * `csv_content` - A CSV-file (as a string) that has been generated by running the PepGM algorithm.
     ///
     /// # Returns
-    /// A `String` containing CSV rows with the columns: `taxon_name,taxon_id,score`.
+    /// A `String` containing CSV rows with the columns: `effect_name,effect_id,score`.
     #[pyfunction]
     pub fn clean_csv_py(csv_content: String) -> String {
         clean_csv(csv_content).unwrap()
@@ -415,10 +415,10 @@ mod pyo3 {
         m.add_function(wrap_pyfunction!(parse_input_peptides_py, m)?)?;
         m.add_function(wrap_pyfunction!(parse_unique_peptides_py, m)?)?;
         m.add_function(wrap_pyfunction!(fetch_unipept_taxa_py, m)?)?;
-        m.add_function(wrap_pyfunction!(perform_taxa_weighing_py, m)?)?;
+        m.add_function(wrap_pyfunction!(perform_effects_weighing_py, m)?)?;
         m.add_function(wrap_pyfunction!(generate_pepgm_graph_py, m)?)?;
         m.add_function(wrap_pyfunction!(execute_pepgm_py, m)?)?;
-        m.add_function(wrap_pyfunction!(cluster_taxa_py, m)?)?;
+        m.add_function(wrap_pyfunction!(cluster_effects_py, m)?)?;
         m.add_function(wrap_pyfunction!(compute_goodness_py, m)?)?;
         m.add_function(wrap_pyfunction!(clean_csv_py, m)?)?;
         m.add_function(wrap_pyfunction!(get_names_for_taxa_py, m)?)?;

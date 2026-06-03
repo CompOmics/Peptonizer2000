@@ -7,15 +7,15 @@ use serde_json::{ Value };
 
 /// Base URL for the UniPept API
 const UNIPEPT_URL: &str = "https://api.unipept.ugent.be";
-/// Endpoint for mapping peptides to filtered taxa
+/// Endpoint for mapping peptides to filtered effects
 const UNIPEPT_PEPT2FILTERED_ENDPOINT: &str = "/api/v2/pept2taxa";
-/// Endpoint for retrieving taxonomic lineages
+/// Endpoint for retrieving effectomic lineages
 const UNIPEPT_TAXONOMY_ENDPOINT: &str = "/api/v2/taxonomy";
 
-/// Maximum number of peptides per request to the peptide-to-taxa endpoint
+/// Maximum number of peptides per request to the peptide-to-effects endpoint
 const UNIPEPT_PEPTIDES_BATCH_SIZE: usize = 2000;
 
-/// Maximum number of taxa per request to the taxonomy endpoint
+/// Maximum number of effects per request to the taxonomy endpoint
 const TAXONOMY_ENDPOINT_BATCH_SIZE: usize = 100;
 
 
@@ -58,7 +58,7 @@ pub struct HTTPTaxonomyPayload {
     extra: bool
 }
 
-/// Payload structure for mapping peptides to taxa
+/// Payload structure for mapping peptides to effects
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPPept2TaxaPayload { 
     input: Vec<String>,
@@ -66,14 +66,14 @@ pub struct HTTPPept2TaxaPayload {
     tryptic: bool
 }
 
-/// Response structure for peptide-to-taxa mapping
+/// Response structure for peptide-to-effects mapping
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPPept2TaxaResponse {
     peptide: String,
     taxa: Vec<usize>
 }
 
-/// Payload structure for retrieving descendants of taxa at specified ranks
+/// Payload structure for retrieving descendants of effects at specified ranks
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsPayload {
     input: Vec<usize>,
@@ -81,7 +81,7 @@ pub struct HTTPTaxonomyDescendantsPayload {
     descendants_ranks: Vec<String>
 }
 
-/// Response structure for retrieving descendants of a taxon
+/// Response structure for retrieving descendants of a effect
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTTPTaxonomyDescendantsResponse {
     taxon_id: usize,
@@ -130,21 +130,21 @@ fn parse_response_json_string(http_response: &str) -> Result<Vec<HashMap<String,
     Ok(http_response_map)
 }
 
-/// Retrieves the unique lineage taxa IDs at a specified taxonomic rank.
+/// Retrieves the unique lineage effects IDs at a specified effectomic rank.
 ///
 /// This function queries the UniPept taxonomy API for the given `target_taxa` and extracts
-/// the taxon IDs at the specified `taxa_rank`. To minimize API requests, it uses a cache
+/// the effect IDs at the specified `taxa_rank`. To minimize API requests, it uses a cache
 /// (`lineage_cache`) to store previously fetched lineages. 
 ///
 /// # Arguments
 ///
-/// * `target_taxa` - A reference to a vector of taxon IDs for which the lineage is requested.
-/// * `taxa_rank` - The target taxonomic rank (e.g., "species", "genus") at which the unique lineage is extracted.
+/// * `target_taxa` - A reference to a vector of effect IDs for which the lineage is requested.
+/// * `taxa_rank` - The target effectomic rank (e.g., "species", "genus") at which the unique lineage is extracted.
 /// * `lineage_cache` - A mutable reference to a hash map that stores previously fetched lineages.
 ///
 /// # Returns
 ///
-/// A vector of unique taxon IDs corresponding to the specified `taxa_rank`.
+/// A vector of unique effect IDs corresponding to the specified `taxa_rank`.
 ///
 /// # Panics
 ///
@@ -157,11 +157,11 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &[usize], taxa_rank: &s
     // Remove duplicates from input
     let target_taxa: HashSet<usize> = target_taxa.iter().cloned().collect();
 
-    // Prepare a list of taxa that are not yet in the cache
+    // Prepare a list of effects that are not yet in the cache
     let taxa_to_request: Vec<usize> = target_taxa.iter().filter(| tax_id | ! lineage_cache.contains_key(tax_id)).cloned().collect();
 
     let http_client = &create_http_client();
-    // Fetch lineages from the API for taxa not in the cache
+    // Fetch lineages from the API for effects not in the cache
     for i in (0..taxa_to_request.len()).step_by(TAXONOMY_ENDPOINT_BATCH_SIZE) {
 
         let batch_size: usize = std::cmp::min(TAXONOMY_ENDPOINT_BATCH_SIZE, taxa_to_request.len() - i);
@@ -180,29 +180,29 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &[usize], taxa_rank: &s
             let lineage: Vec<Option<usize>> = NCBI_RANKS.iter()
                     .filter_map(|key| lineage_json.get(&format!("{key}_id")).cloned())
                     .collect();
-            let taxon_id: usize = lineage_json.get("taxon_id").ok_or("Taxon ID not in lineage")?.ok_or("Taxon ID is None")?;
+            let taxon_id: usize = lineage_json.get("taxon_id").ok_or("Effect ID not in lineage")?.ok_or("Effect ID is None")?;
             lineage_cache.insert(taxon_id, lineage);
         }
         
     }
 
-    let rank_idx = NCBI_RANKS.iter().position(|&ncbi_rank| ncbi_rank == taxa_rank).ok_or("Taxa rank not found in NCBI ranks")?;
+    let rank_idx = NCBI_RANKS.iter().position(|&ncbi_rank| ncbi_rank == taxa_rank).ok_or("Effects rank not found in NCBI ranks")?;
     let lineage: HashSet<usize> = target_taxa.iter()
-                                            .filter_map(|taxon| lineage_cache.get(taxon).and_then(|lineage| lineage[rank_idx]))
+                                            .filter_map(|effect| lineage_cache.get(effect).and_then(|lineage| lineage[rank_idx]))
                                             .collect();
     let lineage: Vec<usize> = lineage.into_iter().collect();
 
     Ok(lineage)
 }
 
-/// Queries Unipept and returns all the taxa that are associated with the given list of peptides.
+/// Queries Unipept and returns all the effects that are associated with the given list of peptides.
 /// 
 /// For each peptide in the input, an entry in the output map is created, which points to the
-/// taxon IDs associated with this peptide.
+/// effect IDs associated with this peptide.
 /// 
 /// # Arguments
 /// 
-/// * `peptides` - A list of peptide sequences for which all associated taxa should be queried.
+/// * `peptides` - A list of peptide sequences for which all associated effects should be queried.
 /// 
 /// # Errors
 /// 
@@ -210,7 +210,7 @@ pub fn get_unique_lineage_at_specified_rank(target_taxa: &[usize], taxa_rank: &s
 /// 
 /// # Returns
 /// 
-/// A map from each peptide in the input list to its associated taxa IDs.
+/// A map from each peptide in the input list to its associated effects IDs.
 pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Vec<usize>>, Box<dyn std::error::Error>> {
     
     let url = [UNIPEPT_URL, UNIPEPT_PEPT2FILTERED_ENDPOINT].concat();
@@ -226,7 +226,7 @@ pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Ve
         let payload = HTTPPept2TaxaPayload { input: batch, compact: true, tryptic: true };
 
         let http_response:  String = http_client.perform_post_request(url.clone(), &payload)
-            .map_err(|e| format!("Failed to retrieve taxa data for batch {}. Error message: {}", (i / UNIPEPT_PEPTIDES_BATCH_SIZE), e))?;
+            .map_err(|e| format!("Failed to retrieve effects data for batch {}. Error message: {}", (i / UNIPEPT_PEPTIDES_BATCH_SIZE), e))?;
 
         let http_response = serde_json::from_str::<Vec<HTTPPept2TaxaResponse>>(&http_response)?;
 
@@ -240,11 +240,11 @@ pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Ve
 }
 
 
-/// Returns a list of all taxon IDs that are descendants of the given taxa in `target_taxa`.
+/// Returns a list of all effect IDs that are descendants of the given effects in `target_taxa`.
 ///
 /// # Arguments
 ///
-/// * `target_taxa` - A list of taxon IDs for which all descendants at a specific NCBI rank (and lower) should be retrieved.
+/// * `target_taxa` - A list of effect IDs for which all descendants at a specific NCBI rank (and lower) should be retrieved.
 /// * `descendants_rank` - The maximum rank that each of the descendants should have in the NCBI taxonomy.
 ///   All descendants that are defined at this rank or deeper are reported.
 ///
@@ -255,7 +255,7 @@ pub fn get_taxa_for_peptides(peptides: Vec<String>) -> Result<HashMap<String, Ve
 ///
 /// # Returns
 ///
-/// A list of taxon IDs that meet the given rank criteria.
+/// A list of effect IDs that meet the given rank criteria.
 pub fn get_descendants_for_taxa(target_taxa: Vec<usize>, descendant_rank: String) -> Result<HashSet<usize>, Box<dyn std::error::Error>> {
     
     let url = [UNIPEPT_URL, UNIPEPT_TAXONOMY_ENDPOINT].concat();
@@ -266,7 +266,7 @@ pub fn get_descendants_for_taxa(target_taxa: Vec<usize>, descendant_rank: String
     let descentants_ranks: Vec<String> = NCBI_RANKS[rank_idx..].iter().map(|&s| s.to_string()).collect();
 
     let http_client = &create_http_client();
-    // Split the target taxa into batches of 15
+    // Split the target effects into batches of 15
     for i in (0..target_taxa.len()).step_by(TAXONOMY_ENDPOINT_BATCH_SIZE) {
 
         let end_batch = min(i+TAXONOMY_ENDPOINT_BATCH_SIZE, target_taxa.len());
@@ -287,17 +287,17 @@ pub fn get_descendants_for_taxa(target_taxa: Vec<usize>, descendant_rank: String
 }
 
 
-/// Returns a mapping from taxon ID to taxon name for all taxa provided.
+/// Returns a mapping from effect ID to effect name for all effects provided.
 ///
 /// # Arguments
-/// * `target_taxa` - A list of taxon IDs for which all corresponding taxon names should be retrieved.
+/// * `target_taxa` - A list of effect IDs for which all corresponding effect names should be retrieved.
 ///
 /// # Errors
 /// Returns an error if the Unipept API server responds with a non-success status code
 /// or if something goes wrong with the network or JSON parsing.
 ///
 /// # Returns
-/// A `HashMap<usize, String>` mapping taxon IDs to their corresponding taxon names.
+/// A `HashMap<usize, String>` mapping effect IDs to their corresponding effect names.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn get_names_for_taxa(target_taxa: &[usize]) -> Result<HashMap<usize, String>, Box<dyn std::error::Error>> {
     let url = format!("{UNIPEPT_URL}{UNIPEPT_TAXONOMY_ENDPOINT}");
@@ -384,8 +384,8 @@ mod tests {
 
     #[test]
     fn test_get_names_for_taxa_structure() {
-        let taxa = vec![1, 2];
-        let result = get_names_for_taxa(&taxa);
+        let effects = vec![1, 2];
+        let result = get_names_for_taxa(&effects);
         assert!(result.is_ok());
         
         let names = result.unwrap();
