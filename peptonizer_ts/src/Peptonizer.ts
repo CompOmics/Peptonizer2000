@@ -23,7 +23,6 @@ class Peptonizer {
      * detecting a peptide at random.
      * @param priors An array of possible values for the gamma (or prior) parameter. Gamma indicates the prior probability
      * of a taxon being present.
-     * @param rank At which NCBI taxonomic rank should the Peptonizer perform the taxonomic inference.
      * @param taxaInGraph How many taxa are being used in the graphical model?
      * @param progressListener Is called everytime the progress of the belief propagation algorithm has been updated.
      * @param workers The amount of Web Workers that can be spawned and used simultaneously to run the Peptonizer.
@@ -37,7 +36,6 @@ class Peptonizer {
         alphas: number[],
         betas: number[],
         priors: number[],
-        rank: string = "species",
         taxaInGraph: number = 100,
         progressListener?: PeptonizerProgressListener,
         workers: number = 2
@@ -63,13 +61,10 @@ class Peptonizer {
             // Notify any listeners that the Peptonizer did start running (and report which set of parameters will be tuned)
             progressListener?.peptonizerStarted(parameterSets.length, parameterSets);
 
-            // const unipept_json = await this.workerPool.fetchUnipeptTaxonInfo(peptidesScores, rank, taxonQuery);
-
             const taxonWeighingResult = await this.workerPool.performTaxaWeighing(
                 peptidesTaxa,
                 peptidesScores,
                 peptidesCounts,
-                rank,
                 taxaInGraph
             );
 

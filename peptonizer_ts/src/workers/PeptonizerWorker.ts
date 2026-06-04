@@ -59,7 +59,7 @@ async function performTaxaWeighing(data: PerformTaxaWeighingTaskData): Promise<P
     let peptidesScores = JSON.stringify(Object.fromEntries(data.peptidesScores));
     let peptidesCounts = JSON.stringify(Object.fromEntries(data.peptidesCounts));
 
-    const [sequenceScoresCsv, taxaWeightsCsv] = await perform_taxa_weighing_wasm(peptidesTaxa, peptidesScores, peptidesCounts, data.taxaInGraph, "species");
+    const [sequenceScoresCsv, taxaWeightsCsv] = await perform_taxa_weighing_wasm(peptidesTaxa, peptidesScores, peptidesCounts, data.taxaInGraph);
 
     console.timeEnd("Execution time taxa weiging");
     return {

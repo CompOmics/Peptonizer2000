@@ -1,5 +1,6 @@
 use crate::unipept_communicator::{get_taxa_for_peptides_async, get_descendants_for_taxa_async};
 use crate::http_client::HttpResult;
+use crate::weight_taxa::normalize_unipept_responses;
 use std::collections::{HashMap, HashSet};
 
 
@@ -9,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 /// * `peptides` - JSON string of peptide sequences.
 /// * `rank` - Taxonomic rank used for filtering (e.g. "species").
 /// * `taxon_query` - JSON string of taxon IDs to filter against.
+/// * `normalize_unipept_responses_flag` - Whether fetched taxa should be normalized to `rank`.
 ///
 /// # Returns
 /// JSON string mapping peptides to filtered taxon IDs.
@@ -18,7 +20,8 @@ use std::collections::{HashMap, HashSet};
 pub async fn fetch_peptides_and_filter_taxa(
     peptides: String,
     rank: String,
-    taxon_query: String
+    taxon_query: String,
+    normalize_unipept_responses_flag: bool
 ) -> HttpResult<String> {
     // Parse arguments
     let peptides: Vec<String> = serde_json::from_str(&peptides)?;
@@ -30,11 +33,28 @@ pub async fn fetch_peptides_and_filter_taxa(
     // Then, we make sure to filter the taxa and only keep those that are associated 
     // to the taxa of interest indicated by the user. Retrieve all (in)direct children
     // of the filter taxa provided by the user
-    let taxa_filter: HashSet<usize> = get_descendants_for_taxa_async(taxon_query_ids, rank).await?;
+    let taxa_filter: HashSet<usize> = get_descendants_for_taxa_async(taxon_query_ids, rank.clone()).await?;
 
     // Compute the intersection of the taxa that should be retained and the original list of taxa
     for taxa_list in peptides_taxa.values_mut() {
         taxa_list.retain(|taxon| taxa_filter.contains(taxon));
+    }
+
+    if normalize_unipept_responses_flag {
+        // Keep key order stable while normalizing taxa vectors in bulk.
+        let peptide_keys: Vec<String> = peptides_taxa.keys().cloned().collect();
+        let mut taxa_vectors: Vec<Vec<usize>> = peptide_keys
+            .iter()
+            .filter_map(|peptide| peptides_taxa.get(peptide).cloned())
+            .collect();
+
+        normalize_unipept_responses(&mut taxa_vectors, &rank)
+            .await
+            .map_err(|e| format!("Failed to normalize Unipept responses: {e}"))?;
+
+        for (peptide, normalized_taxa) in peptide_keys.into_iter().zip(taxa_vectors.into_iter()) {
+            peptides_taxa.insert(peptide, normalized_taxa);
+        }
     }
 
     Ok(serde_json::to_string(&peptides_taxa)?)
@@ -52,7 +72,7 @@ mod tests {
 
         let taxon_query = serde_json::to_string(&vec![2]).unwrap();
 
-        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query).await;
+        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query, true).await;
         assert!(result.is_ok());
         let result = result.unwrap();
 
@@ -67,7 +87,7 @@ mod tests {
         let peptides = "[]".to_string();
         let taxon_query = "[]".to_string();
 
-        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query).await;
+        let result = fetch_peptides_and_filter_taxa(peptides, "species".to_string(), taxon_query, true).await;
         assert!(result.is_ok());
         let result = result.unwrap();
 

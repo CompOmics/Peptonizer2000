@@ -12,7 +12,8 @@ use crate::unipept_communicator::get_unique_lineage_at_specified_rank_async;
 /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
 /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
 /// * `max_taxa` - Maximum number of taxa to include in output.
-/// * `taxa_rank` - NCBI rank at which the Peptonizer analysis should be performed. Should be a rank that is supported by Unipept.
+/// * `taxa_rank` - Optional NCBI rank at which taxa should be normalized.
+///   If `None`, input taxa are assumed to already be normalized.
 ///
 /// # Returns
 ///
@@ -24,7 +25,7 @@ pub async fn perform_taxa_weighing(
     pep_scores: String,
     pep_psm_counts: String,
     max_taxa: usize,
-    taxa_rank: String
+    taxa_rank: Option<String>
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
     log("Parsing Unipept responses from disk...");
     let pep_taxa: HashMap<String, Vec<usize>> = serde_json::from_str(&pep_taxa)?;
@@ -33,8 +34,13 @@ pub async fn perform_taxa_weighing(
 
     let mut taxa: Vec<Vec<usize>> = pep_taxa.into_values().collect();
     
-    log("Started mapping all taxon ids to the specified rank...");
-    normalize_unipept_responses(&mut taxa, &taxa_rank).await?;
+    if let Some(taxa_rank) = taxa_rank {
+        log("Started mapping all taxon ids to the specified rank...");
+        normalize_unipept_responses(&mut taxa, &taxa_rank).await?;
+    } else {
+        log("Skipping taxon normalization because taxa_rank is None...");
+    }
+
     let chosen_idx: HashSet<usize> = weighted_random_sample(&taxa, 10000)?;
 
     log(&format!("Using {} sequences as input...", chosen_idx.len()));
@@ -205,7 +211,7 @@ fn generate_taxa_weights_csv(higher_taxa: Vec<usize>, higher_taxid_weights: Vec<
 ///
 /// * `taxa` - Mutable reference to a vector of vectors of taxon IDs.
 /// * `taxa_rank` - The desired taxonomic rank to normalize to (e.g., "species").
-async fn normalize_unipept_responses(taxa: &mut [Vec<usize>], taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) async fn normalize_unipept_responses(taxa: &mut [Vec<usize>], taxa_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
     
     // TODO: should we first do get_lineages_for_taxa to limit Unipept calls (see python)?
     let mut lineage_cache: HashMap<usize, Vec<Option<usize>>> = HashMap::new();
@@ -255,7 +261,7 @@ mod tests {
         let pep_scores_json = r#"{"PEP1":0.8,"PEP2":0.5}"#.to_string();
         let pep_psm_counts_json = r#"{"PEP1":4,"PEP2":2}"#.to_string();
         let max_taxa = 10;
-        let taxa_rank = "species".to_string();
+        let taxa_rank = None;
 
         let csvs = perform_taxa_weighing(
             pep_taxa_json,

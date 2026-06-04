@@ -54,9 +54,9 @@ mod wasm {
     pub async fn fetch_unipept_taxa_wasm(
         peptides: String,
         rank: String,
-        taxon_query: String
+        taxon_query: String,
     ) -> Result<String, JsValue> {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query, true)
             .await
             .map_err(|e| JsValue::from_str(&format!("fetch_unipept_taxa_wasm failed: {e}")))
     }
@@ -69,7 +69,6 @@ mod wasm {
     /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
     /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
     /// * `max_taxa` - Maximum number of taxa to include in output.
-    /// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
     ///
     /// # Returns
     ///
@@ -81,11 +80,10 @@ mod wasm {
         pep_taxa: String,
         pep_scores: String,
         pep_psm_counts: String,
-        max_taxa: usize,
-        taxa_rank: String
+        max_taxa: usize
     ) -> Result<Box<[JsValue]>, JsValue> {
         console_error_panic_hook::set_once(); // Enable panic logging
-        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, taxa_rank)
+        let (sequence_csv, taxa_weights_csv): (String, String) = perform_taxa_weighing(pep_taxa, pep_scores, pep_psm_counts, max_taxa, None)
             .await
             .map_err(|e| JsValue::from_str(&format!("perform_taxa_weighing_wasm failed: {e}")))?;
 
@@ -274,9 +272,15 @@ mod pyo3 {
     pub fn fetch_unipept_taxa_py(
         peptides: String,
         rank: String,
-        taxon_query: String
+        taxon_query: String,
     ) -> String {
-        block_on_binding_future(fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)).unwrap()
+        block_on_binding_future(fetch_peptides_and_filter_taxa(
+            peptides,
+            rank,
+            taxon_query,
+            false,
+        ))
+        .unwrap()
     }
 
     /// Represents the main pipeline for weighting taxa based on peptide evidence.
@@ -287,7 +291,8 @@ mod pyo3 {
     /// * `pep_scores` - JSON string mapping peptide sequences to their scores (float).
     /// * `pep_psm_counts` - JSON string mapping peptide sequences to their PSM counts (int).
     /// * `max_taxa` - Maximum number of taxa to include in output.
-    /// * `taxa_rank` - The taxonomic rank to normalize taxa to (e.g., "species").
+    /// * `taxa_rank` - Optional taxonomic rank to normalize taxa to.
+    ///   If `None`, taxa are assumed to already be normalized.
     ///
     /// # Returns
     ///
@@ -302,7 +307,7 @@ mod pyo3 {
         max_taxa: usize,
         taxa_rank: String
     ) -> (String, String) {
-        block_on_binding_future(perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, taxa_rank)).unwrap()
+        block_on_binding_future(perform_taxa_weighing(unipept_responses, pep_scores, pep_psm_counts, max_taxa, Some(taxa_rank))).unwrap()
     }
 
     /// Generates a GraphML representation of a factor graph from a CSV string of taxon weights.

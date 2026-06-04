@@ -101,7 +101,6 @@ class WorkerPool {
      * @param peptidesScores Mapping between peptide sequences that need to be considered by the peptonizer and a
      * scoring value assigned to each sequence by prior steps (e.g. search engines).
      * @param peptidesCounts Mapping between peptide sequences and their occurrences in the input file.
-     * @param rank At which NCBI taxonomic rank should the Peptonizer perform the taxonomic inference?
      * @param taxaInGraph How many taxa are being used in the graphical model?
      * @return A CSV-representation of a dataframe with taxon weights.
      */
@@ -109,7 +108,6 @@ class WorkerPool {
         peptidesTaxa: Map<string, number[]>,
         peptidesScores: Map<string, number>,
         peptidesCounts: Map<string, number>,
-        rank: string,
         taxaInGraph: number,
     ): Promise<[string, string]> {
         if (this.isCancelled) {
@@ -120,7 +118,6 @@ class WorkerPool {
             peptidesTaxa,
             peptidesScores,
             peptidesCounts,
-            rank,
             taxaInGraph
         };
 
