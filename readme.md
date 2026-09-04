@@ -44,6 +44,7 @@
       </ul>
     </li>
     <li><a href="#usage">Usage</a></li>
+    <li><a href="#running-an-analysis-natively-without-snakemake-or-the-website">Running an analysis natively, without Snakemake or the website</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -263,6 +264,83 @@ To execute a test run of the Peptonizer2000 using the provided files:
  2. In the config file, make sure to point to the test sample you want to use. By default, this is S03
  3. Start to peptonize with the command `snakemake --use-conda --cores 1`. If you have sufficient CPU and memory power available to your system, you can increase the amount of cores in order to speed up the workflow.
 
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Running an analysis natively, without Snakemake or the website
+
+The `peptonizer_analysis` folder provides three standalone Rust command-line tools that run the full
+Peptonizer2000 pipeline (effect weighing, factor graph construction, a belief-propagation grid search, and
+best-parameter selection) directly against TSV files, without installing Conda/Snakemake and without a browser.
+Unlike the Snakemake workflow, these tools skip the Unipept querying step entirely — you supply the
+peptide-effect relationships yourself:
+
+- `taxonomic_analysis` — infers taxonomic origin from peptide-to-taxon relationships (taxon IDs are normalized
+  to species rank before weighing)
+- `protein_inference` — infers the source protein from peptide-to-protein relationships
+- `functional_analysis` — infers functional annotations from peptide-to-function relationships
+
+### Building
+
+```bash
+cd peptonizer_analysis
+cargo build --release
+```
+
+The compiled binaries are written to `target/release/`.
+
+### Input files
+
+Each tool takes three tab-separated files with **no header row**:
+
+| File | Flag | Columns |
+|---|---|---|
+| Relationships | `--peptide-taxa` / `--peptide-proteins` / `--peptide-functions` | `peptide`, `id` (an integer taxon/function ID, or a protein name for `--peptide-proteins`) |
+| Scores | `--peptide-scores` | `peptide`, `score` (a float, e.g. from your search engine) |
+| Counts | `--peptide-counts` | `peptide`, `count` (an integer PSM count) |
+
+A peptide can appear on multiple rows of the relationships file to associate it with more than one ID.
+
+### Usage
+
+```bash
+./target/release/taxonomic_analysis \
+  --peptide-taxa peptide_taxa.tsv \
+  --peptide-scores peptide_scores.tsv \
+  --peptide-counts peptide_counts.tsv \
+  --output taxonomic_analysis_results.tsv
+
+./target/release/protein_inference \
+  --peptide-proteins peptide_protein.tsv \
+  --peptide-scores peptide_scores.tsv \
+  --peptide-counts peptide_counts.tsv \
+  --output protein_inference_results.tsv
+
+./target/release/functional_analysis \
+  --peptide-functions peptide_functions.tsv \
+  --peptide-scores peptide_scores.tsv \
+  --peptide-counts peptide_counts.tsv \
+  --output functional_analysis_results.tsv
+```
+
+`--output` is optional and defaults to `<tool_name>_results.tsv` in the current directory. Run any tool with
+`--help`/`-h` for a one-line usage reminder. Unlike the Snakemake workflow's `config.yaml`, the alpha/beta/prior
+grid-search ranges are currently fixed per tool rather than user-configurable.
+
+### Output
+
+A TSV with a header row and one row per ID, sorted by descending posterior probability, e.g. for
+`taxonomic_analysis`:
+
+```
+taxon_id	probability
+2	0.98
+816	0.42
+```
+
+(`protein_id`/`function_id` for the other two tools; `protein_inference` reports the original protein name
+instead of an internal ID.)
+
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- LICENSE -->
 ## License
