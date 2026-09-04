@@ -16,14 +16,14 @@ use crate::effects_clustering::{Effect, parse_effect_csv};
 /// # Errors
 /// This function may return an error if the input CSV or JSON cannot be parsed.
 pub fn compute_goodness(
-    effect_cluster_heads_csv: String,
-    peptonizer_results: String
+    effect_cluster_heads_csv: &str,
+    peptonizer_results: &str
 ) -> Result<f64, Box<dyn std::error::Error>> {
 
     let taxid_weights: Vec<Effect> = parse_effect_csv(effect_cluster_heads_csv)?;
     let effect: Vec<usize> = taxid_weights.iter().map(|t| t.effect).collect();
 
-    let effects_scores: HashMap<String, f64> = serde_json::from_str(&peptonizer_results)?;
+    let effects_scores: HashMap<String, f64> = serde_json::from_str(peptonizer_results)?;
     let mut effects_scores: Vec<(&String, &f64)> = effects_scores.iter().collect();
 
     effects_scores.sort_by(|a, b| b.1.partial_cmp(a.1).expect("Partial compare returned None")); // ascending order
@@ -159,7 +159,7 @@ mod tests {
             "2": 0.8
         }).to_string();
 
-        let result = compute_goodness(csv, json_scores);
+        let result = compute_goodness(&csv, &json_scores);
         assert!(result.is_ok());
         let score = result.unwrap();
         assert!(score.is_finite());

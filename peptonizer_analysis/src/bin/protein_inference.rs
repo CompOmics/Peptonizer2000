@@ -24,7 +24,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let arguments =
         peptonizer_analysis::parse_arguments("--peptide-proteins", "protein_inference_results.tsv")?;
     let (relationships, proteins_by_id) =
-        peptonizer_analysis::read_protein_relationships(arguments.relationships)?;
+        peptonizer_analysis::read_relationships_with_string_ids(arguments.relationships)?;
     let scores = peptonizer_analysis::read_scores(arguments.scores)?;
     let counts = peptonizer_analysis::read_counts(arguments.counts)?;
     let result = peptonizer_analysis::run_analysis(
@@ -38,7 +38,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         None,
     )?;
     let probabilities =
-        peptonizer_analysis::restore_protein_names(result.probabilities, &proteins_by_id)?;
+        peptonizer_analysis::restore_original_ids(result.probabilities, &proteins_by_id)?;
     peptonizer_analysis::write_results(arguments.output, "protein_id", probabilities)?;
     println!(
         "Selected parameter set: alpha={}, beta={}, prior={}",

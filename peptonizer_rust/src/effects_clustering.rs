@@ -28,7 +28,7 @@ pub struct Effect {
 ///
 /// # Errors
 /// Returns an error if CSV parsing fails.
-pub fn parse_effect_csv(effects_weights_csv: String) -> Result<Vec<Effect>, Box<dyn std::error::Error>> {
+pub fn parse_effect_csv(effects_weights_csv: &str) -> Result<Vec<Effect>, Box<dyn std::error::Error>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_reader(effects_weights_csv.as_bytes());
@@ -81,7 +81,7 @@ pub fn generate_effects_cluster_csv(effects: Vec<Effect>) -> Result<String, Box<
 pub fn cluster_effects(sequence_scores_csv: String, effects_weights_csv: String, similarity_threshold: f32) -> Result<String, Box<dyn std::error::Error>> {
 
     let sequence_scores = parse_effect_weights_csv(sequence_scores_csv)?;
-    let effects_weights = parse_effect_csv(effects_weights_csv)?;
+    let effects_weights = parse_effect_csv(&effects_weights_csv)?;
 
     let peptidome_dict = get_peptides_per_effect(&sequence_scores)?;
     let (similarities, effect_index) = compute_detected_peptidome_similarity(peptidome_dict);
@@ -211,7 +211,7 @@ id,effect,scaled_weight,unique
 2,20,0.8,false
 ";
 
-        let effects = parse_effect_csv(csv_data.to_string()).unwrap();
+        let effects = parse_effect_csv(csv_data).unwrap();
         assert_eq!(effects.len(), 2);
         assert_eq!(effects[0].id, 1);
         assert_eq!(effects[1].effect, 20);
@@ -245,7 +245,7 @@ id,effect,scaled_weight,unique
         ];
 
         let csv_string = generate_effects_cluster_csv(effects.clone()).unwrap();
-        let parsed = parse_effect_csv(csv_string).unwrap();
+        let parsed = parse_effect_csv(&csv_string).unwrap();
 
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].effect, 10);

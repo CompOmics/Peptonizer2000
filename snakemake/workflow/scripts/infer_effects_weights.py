@@ -33,7 +33,7 @@ parser.add_argument(
     type=str,
     required=False,
     default="species",
-    help="Effectomic rank at which you want the Peptonizer2000 results to be resolved.",
+    help="Taxonomic rank at which you want the Peptonizer2000 results to be resolved.",
 )
 parser.add_argument(
     "--pout-file",

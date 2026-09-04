@@ -30,7 +30,7 @@ pub fn parse_effect_weights_csv(sequence_scores_csv: String) -> Result<Vec<Effec
 
     let mut sequence_scores = Vec::new();
     for record in rdr.deserialize() {
-        let row: EffectWeight = record.unwrap();
+        let row: EffectWeight = record?;
         sequence_scores.push(row);
     }
 

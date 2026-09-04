@@ -1,5 +1,6 @@
 //! CLI: runs the Peptonizer2000 pipeline over a peptide-function relationship TSV and writes a
-//! `function_id, probability` TSV.
+//! `function_id, probability` TSV. Function IDs may be arbitrary strings (e.g. GO or EC terms),
+//! restored on the way out; the input file must have no header row.
 
 use std::error::Error;
 
@@ -25,7 +26,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         "--peptide-functions",
         "functional_analysis_results.tsv",
     )?;
-    let relationships = peptonizer_analysis::read_relationships(arguments.relationships)?;
+    let (relationships, functions_by_id) =
+        peptonizer_analysis::read_relationships_with_string_ids(arguments.relationships)?;
     let scores = peptonizer_analysis::read_scores(arguments.scores)?;
     let counts = peptonizer_analysis::read_counts(arguments.counts)?;
     let result = peptonizer_analysis::run_analysis(
@@ -38,7 +40,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         FUNCTIONS_TO_RETURN,
         None,
     )?;
-    peptonizer_analysis::write_results(arguments.output, "function_id", result.probabilities)?;
+    let probabilities =
+        peptonizer_analysis::restore_original_ids(result.probabilities, &functions_by_id)?;
+    peptonizer_analysis::write_results(arguments.output, "function_id", probabilities)?;
     println!(
         "Selected parameter set: alpha={}, beta={}, prior={}",
         result.alpha, result.beta, result.prior

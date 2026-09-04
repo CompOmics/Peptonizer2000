@@ -271,13 +271,14 @@ To execute a test run of the Peptonizer2000 using the provided files:
 The `peptonizer_analysis` folder provides three standalone Rust command-line tools that run the full
 Peptonizer2000 pipeline (effect weighing, factor graph construction, a belief-propagation grid search, and
 best-parameter selection) directly against TSV files, without installing Conda/Snakemake and without a browser.
-Unlike the Snakemake workflow, these tools skip the Unipept querying step entirely — you supply the
-peptide-effect relationships yourself:
+You supply the peptide-effect relationships yourself, rather than starting from a raw peptide list — `protein_inference`
+and `functional_analysis` then make no Unipept queries at all, since protein and function IDs are used as-is:
 
 - `taxonomic_analysis` — infers taxonomic origin from peptide-to-taxon relationships (taxon IDs are normalized
-  to species rank before weighing)
-- `protein_inference` — infers the source protein from peptide-to-protein relationships
-- `functional_analysis` — infers functional annotations from peptide-to-function relationships
+  to species rank before weighing via a Unipept API call, so this tool needs network access)
+- `protein_inference` — infers the source protein from peptide-to-protein relationships (no Unipept queries)
+- `functional_analysis` — infers functional annotations from peptide-to-function relationships (no Unipept
+  queries)
 
 ### Building
 

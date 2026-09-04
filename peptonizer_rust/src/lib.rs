@@ -183,7 +183,7 @@ mod wasm {
         effect_cluster_heads_csv: String,
         peptonizer_results: String
     ) -> f64 {
-        compute_goodness(effect_cluster_heads_csv, peptonizer_results).unwrap()
+        compute_goodness(&effect_cluster_heads_csv, &peptonizer_results).unwrap()
     }
 
 }
@@ -262,7 +262,7 @@ mod pyo3 {
     ///
     /// # Arguments
     /// * `peptides` - JSON string of peptide sequences.
-    /// * `rank` - Effectomic rank used for filtering (e.g. "species").
+    /// * `rank` - Taxonomic rank used for filtering (e.g. "species").
     /// * `taxon_query` - JSON string of effect IDs to filter against.
     ///
     /// # Returns
@@ -404,7 +404,7 @@ mod pyo3 {
         effect_cluster_heads_csv: String,
         peptonizer_results: String
     ) -> f64 {
-        compute_goodness(effect_cluster_heads_csv, peptonizer_results).unwrap()
+        compute_goodness(&effect_cluster_heads_csv, &peptonizer_results).unwrap()
     }
 
     /// Returns a mapping from effect ID to effect name for all effects provided.

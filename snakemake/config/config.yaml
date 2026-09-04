@@ -37,7 +37,7 @@ effects_in_plot: 25
 
 # ** Unipept specific parameters **
 
-# Which effect should all queried effects be a child of? (2 is bacteria, meaning that we are only looking for bacteria in
+# Which taxon should all queried taxa be a child of? (2 is bacteria, meaning that we are only looking for bacteria in
 # our input sample).
 taxon_query: [2]
 

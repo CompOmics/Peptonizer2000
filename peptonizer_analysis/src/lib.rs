@@ -1,8 +1,12 @@
 //! Native, standalone entry point for the Peptonizer2000 belief-propagation pipeline.
 //!
 //! Unlike the Snakemake workflow and the browser/WASM frontend, this crate runs the pipeline
-//! directly from tab-separated peptide relationship/score/count files with no Unipept queries
-//! and no Python involved. It reuses `peptonizer_rust`'s algorithm code (`weight_effects`,
+//! directly from tab-separated peptide relationship/score/count files with no Python involved.
+//! `protein_inference` and `functional_analysis` make no Unipept queries: protein and function
+//! IDs are used as-is. `taxonomic_analysis` does query Unipept — it normalizes taxon IDs to
+//! [`taxonomic_analysis`'s configured rank](../bin/taxonomic_analysis.rs) before weighing, the
+//! same way the Snakemake workflow and browser frontend do, so it requires network access to
+//! `api.unipept.ugent.be`. This crate reuses `peptonizer_rust`'s algorithm code (`weight_effects`,
 //! `factor_graph`, `effects_clustering`, `zero_lookahead_belief_propagation`,
 //! `analyse_grid_search`) as a normal path dependency — see that crate's `Cargo.toml` for the
 //! `rlib` build target and `lib.rs` for the `pub mod` declarations that make this possible.
@@ -14,10 +18,13 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::future::Future;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use csv::{ReaderBuilder, WriterBuilder};
 use peptonizer_rust::{analyse_grid_search, effects_clustering, factor_graph, weight_effects, zero_lookahead_belief_propagation};
+use tokio::runtime::{Builder, Runtime};
 
 /// Parsed command-line arguments shared by all three analysis binaries.
 pub struct AnalysisArguments {
@@ -101,6 +108,10 @@ fn parse_arguments_from(
 
 /// Reads a `peptide<TAB>relationship_id` TSV into a peptide → relationship-IDs map.
 ///
+/// The ID column must be a numeric ID (e.g. an NCBI taxon ID) — use
+/// [`read_relationships_with_string_ids`] instead for arbitrary string IDs (protein names,
+/// GO/EC-style functional annotation IDs, ...).
+///
 /// A file may optionally start with a header row: if the second column of the first row does not
 /// parse as a `usize`, that row is silently skipped. Every other row must parse, and a peptide can
 /// appear on multiple rows to be associated with multiple IDs.
@@ -130,24 +141,26 @@ pub fn read_relationships(
     Ok(relationships)
 }
 
-/// Reads a `peptide<TAB>protein_name` TSV into a peptide → internal-protein-ID map, along with the
-/// reverse mapping from internal ID back to the original protein name.
+/// Reads a `peptide<TAB>id` TSV into a peptide → internal-numeric-ID map, along with the reverse
+/// mapping from internal ID back to the original ID string. Used for relationship IDs that are
+/// arbitrary strings rather than numbers — protein names (`protein_inference`) and functional
+/// annotation IDs such as GO/EC terms (`functional_analysis`).
 ///
 /// Internal IDs are assigned sequentially in first-seen order so they can be used as compact node
-/// IDs in the belief-propagation graph; [`restore_protein_names`] reverses this mapping on the
+/// IDs in the belief-propagation graph; [`restore_original_ids`] reverses this mapping on the
 /// final results. Unlike [`read_relationships`]/[`read_scores`]/[`read_counts`], this function does
-/// **not** tolerate an optional header row — protein names are arbitrary strings, so a header
-/// cannot be distinguished from real data by a failed parse, and would otherwise be silently
-/// ingested as a bogus protein entry. The input file must not have a header row.
+/// **not** tolerate an optional header row — these IDs are arbitrary strings, so a header cannot
+/// be distinguished from real data by a failed parse, and would otherwise be silently ingested as
+/// a bogus entry. The input file must not have a header row.
 ///
 /// # Errors
-/// Returns an error if a row is missing its peptide or protein column.
-pub fn read_protein_relationships(
+/// Returns an error if a row is missing its peptide or ID column.
+pub fn read_relationships_with_string_ids(
     path: impl AsRef<Path>,
 ) -> Result<(HashMap<String, Vec<usize>>, HashMap<usize, String>), Box<dyn Error>> {
     let mut relationships = HashMap::new();
-    let mut protein_ids = HashMap::new();
-    let mut proteins_by_id = HashMap::new();
+    let mut interned_ids = HashMap::new();
+    let mut ids_by_index = HashMap::new();
     let mut reader = ReaderBuilder::new()
         .delimiter(b'\t')
         .has_headers(false)
@@ -156,38 +169,39 @@ pub fn read_protein_relationships(
     for record in reader.records() {
         let record = record?;
         let peptide = record.get(0).ok_or("Missing peptide column")?.to_owned();
-        let protein = record.get(1).ok_or("Missing protein_id column")?.to_owned();
-        let next_id = protein_ids.len();
-        let protein_id = *protein_ids.entry(protein.clone()).or_insert(next_id);
+        let id = record.get(1).ok_or("Missing ID column")?.to_owned();
+        let next_index = interned_ids.len();
+        let index = *interned_ids.entry(id.clone()).or_insert(next_index);
 
-        proteins_by_id.entry(protein_id).or_insert(protein);
+        ids_by_index.entry(index).or_insert(id);
         relationships
             .entry(peptide)
             .or_insert_with(Vec::new)
-            .push(protein_id);
+            .push(index);
     }
 
-    Ok((relationships, proteins_by_id))
+    Ok((relationships, ids_by_index))
 }
 
-/// Replaces the internal numeric protein IDs used as [`AnalysisResult::probabilities`] keys with
-/// the original protein names, using the reverse mapping produced by [`read_protein_relationships`].
+/// Replaces the internal numeric IDs used as [`AnalysisResult::probabilities`] keys with the
+/// original ID strings, using the reverse mapping produced by
+/// [`read_relationships_with_string_ids`].
 ///
 /// # Errors
 /// Returns an error if a key does not parse as a `usize`, or if it has no corresponding entry in
-/// `proteins_by_id`.
-pub fn restore_protein_names(
+/// `ids_by_index`.
+pub fn restore_original_ids(
     results: HashMap<String, f32>,
-    proteins_by_id: &HashMap<usize, String>,
+    ids_by_index: &HashMap<usize, String>,
 ) -> Result<HashMap<String, f32>, Box<dyn Error>> {
     results
         .into_iter()
-        .map(|(id, probability)| {
-            let id = id.parse::<usize>()?;
-            let protein = proteins_by_id
-                .get(&id)
-                .ok_or_else(|| format!("No protein found for internal ID {id}"))?;
-            Ok((protein.clone(), probability))
+        .map(|(index, probability)| {
+            let index = index.parse::<usize>()?;
+            let id = ids_by_index
+                .get(&index)
+                .ok_or_else(|| format!("No ID found for internal index {index}"))?;
+            Ok((id.clone(), probability))
         })
         .collect()
 }
@@ -267,16 +281,13 @@ pub fn run_analysis(
     validate_inputs(&relationships, &scores, &counts)?;
 
     println!("Preparing peptide relationships and weights...");
-    let relationships = serde_json::to_string(&relationships)?;
-    let scores = serde_json::to_string(&scores)?;
-    let counts = serde_json::to_string(&counts)?;
-    let (sequence_scores_csv, relationship_weights_csv) = weight_effects::perform_effects_weighing(
+    let (sequence_scores_csv, relationship_weights_csv) = block_on(weight_effects::perform_effects_weighing_typed(
         relationships,
         scores,
         counts,
         results_to_return,
         effects_rank.map(str::to_owned),
-    )?;
+    ))?;
 
     println!("Building the factor graph...");
     let factor_graph = factor_graph::generate_graph(sequence_scores_csv.clone())?;
@@ -307,10 +318,7 @@ pub fn run_analysis(
                     None,
                 )?;
                 println!("Scoring parameter set {parameter_set_index}/{parameter_set_count}...");
-                let goodness = analyse_grid_search::compute_goodness(
-                    cluster_heads_csv.clone(),
-                    result_json.clone(),
-                )?;
+                let goodness = analyse_grid_search::compute_goodness(&cluster_heads_csv, &result_json)?;
 
                 if goodness > best_goodness {
                     best_goodness = goodness;
@@ -357,6 +365,26 @@ pub fn write_results(
 
 fn tsv_reader(path: impl AsRef<Path>) -> Result<csv::Reader<std::fs::File>, Box<dyn Error>> {
     Ok(ReaderBuilder::new().delimiter(b'\t').from_path(path)?)
+}
+
+/// Blocks the calling (synchronous) thread on `future` using a lazily-initialized Tokio runtime.
+///
+/// This CLI has no async call sites of its own — the only `async` code it reaches is
+/// [`weight_effects::perform_effects_weighing_typed`]'s Unipept HTTP call for `taxonomic_analysis`
+/// — so a single blocking entry point is simpler than threading `async`/`.await` through
+/// `main()`, argument parsing, and every `read_*`/`write_results` helper. Mirrors the
+/// `block_on_binding_future` helper `peptonizer_rust`'s PyO3 bindings use for the same reason.
+fn block_on<F: Future>(future: F) -> F::Output {
+    static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+    TOKIO_RUNTIME
+        .get_or_init(|| {
+            Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to initialize Tokio runtime")
+        })
+        .block_on(future)
 }
 
 /// Checks that every peptide referenced in `relationships` has a score, a count, and at least one
@@ -557,48 +585,62 @@ mod tests {
         assert!(read_relationships(file.path()).is_err());
     }
 
-    // --- read_protein_relationships ---
+    // --- read_relationships_with_string_ids ---
 
     #[test]
-    fn read_protein_relationships_assigns_stable_ids_and_reverse_mapping() {
+    fn read_relationships_with_string_ids_assigns_stable_ids_and_reverse_mapping() {
         let file = TempFile::with_content(
             "protein_relationships",
             "PEPTIDEA\tPROT1\nPEPTIDEB\tPROT2\nPEPTIDEC\tPROT1\n",
         );
-        let (relationships, proteins_by_id) = read_protein_relationships(file.path()).unwrap();
+        let (relationships, ids_by_index) =
+            read_relationships_with_string_ids(file.path()).unwrap();
 
         let prot1_id = relationships["PEPTIDEA"][0];
         assert_eq!(relationships["PEPTIDEC"], vec![prot1_id]);
-        assert_eq!(proteins_by_id[&prot1_id], "PROT1");
+        assert_eq!(ids_by_index[&prot1_id], "PROT1");
 
         let prot2_id = relationships["PEPTIDEB"][0];
         assert_ne!(prot1_id, prot2_id);
-        assert_eq!(proteins_by_id[&prot2_id], "PROT2");
+        assert_eq!(ids_by_index[&prot2_id], "PROT2");
     }
 
-    // --- restore_protein_names ---
+    #[test]
+    fn read_relationships_with_string_ids_accepts_non_numeric_ids() {
+        let file = TempFile::with_content(
+            "function_relationships",
+            "PEPTIDEA\tGO:0006915\nPEPTIDEB\tEC:1.1.1.1\n",
+        );
+        let (relationships, ids_by_index) =
+            read_relationships_with_string_ids(file.path()).unwrap();
+
+        let go_id = relationships["PEPTIDEA"][0];
+        assert_eq!(ids_by_index[&go_id], "GO:0006915");
+    }
+
+    // --- restore_original_ids ---
 
     #[test]
-    fn restore_protein_names_maps_ids_back_to_names() {
+    fn restore_original_ids_maps_indices_back_to_ids() {
         let mut results = HashMap::new();
         results.insert("0".to_string(), 0.9f32);
         results.insert("1".to_string(), 0.1f32);
 
-        let mut proteins_by_id = HashMap::new();
-        proteins_by_id.insert(0usize, "PROT1".to_string());
-        proteins_by_id.insert(1usize, "PROT2".to_string());
+        let mut ids_by_index = HashMap::new();
+        ids_by_index.insert(0usize, "PROT1".to_string());
+        ids_by_index.insert(1usize, "PROT2".to_string());
 
-        let restored = restore_protein_names(results, &proteins_by_id).unwrap();
+        let restored = restore_original_ids(results, &ids_by_index).unwrap();
         assert_eq!(restored["PROT1"], 0.9f32);
         assert_eq!(restored["PROT2"], 0.1f32);
     }
 
     #[test]
-    fn restore_protein_names_errors_on_unknown_id() {
+    fn restore_original_ids_errors_on_unknown_index() {
         let mut results = HashMap::new();
         results.insert("42".to_string(), 0.5f32);
 
-        let restored = restore_protein_names(results, &HashMap::new());
+        let restored = restore_original_ids(results, &HashMap::new());
         assert!(restored.is_err());
     }
 

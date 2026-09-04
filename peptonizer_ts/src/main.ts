@@ -196,6 +196,7 @@ const startToPeptonize = async function() {
             alphas,
             betas,
             priors,
+            rank,
             50,
             new ProgressListener(document.getElementById("progress-view")!, 2),
             1 // 1 worker for debuggin purposes

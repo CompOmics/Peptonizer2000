@@ -28,7 +28,36 @@ pub async fn perform_effects_weighing(
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
     log("Parsing Unipept responses from disk...");
     let peptide_effects: HashMap<String, Vec<usize>> = serde_json::from_str(&pep_effects)?;
+    let peptide_scores_map: HashMap<String, f32> = serde_json::from_str(&pep_scores)?;
+    let peptide_counts_map: HashMap<String, usize> = serde_json::from_str(&pep_psm_counts)?;
 
+    perform_effects_weighing_typed(peptide_effects, peptide_scores_map, peptide_counts_map, max_effects, effects_rank).await
+}
+
+/// Same pipeline as [`perform_effects_weighing`], but for native Rust callers (e.g. `peptonizer_analysis`)
+/// that already have the peptide relationships, scores, and counts as typed maps and don't need the
+/// JSON serialize/deserialize round-trip required by the WASM/PyO3 bindings.
+///
+/// # Arguments
+///
+/// * `peptide_effects` - Mapping of peptide sequences to lists of effect IDs.
+/// * `peptide_scores_map` - Mapping of peptide sequences to their scores (float).
+/// * `peptide_counts_map` - Mapping of peptide sequences to their PSM counts (int).
+/// * `max_effects` - Maximum number of effects to include in output.
+/// * `effects_rank` - NCBI rank at which the Peptonizer analysis should be performed. Should be a rank that is supported by Unipept.
+///
+/// # Returns
+///
+/// Tuple `(sequence_csv, effects_weights_csv)`:
+/// * `sequence_csv` - CSV string of peptide peptides and their weights.
+/// * `effects_weights_csv` - CSV string of effects weights and uniqueness.
+pub async fn perform_effects_weighing_typed(
+    peptide_effects: HashMap<String, Vec<usize>>,
+    peptide_scores_map: HashMap<String, f32>,
+    peptide_counts_map: HashMap<String, usize>,
+    max_effects: usize,
+    effects_rank: Option<String>
+) -> Result<(String, String), Box<dyn std::error::Error>> {
     let peptides: Vec<String> = peptide_effects.keys().map(|seq| seq.to_owned()).collect();
 
     let mut effects: Vec<Vec<usize>> = peptide_effects.into_values().collect();
@@ -48,15 +77,12 @@ pub async fn perform_effects_weighing(
     let peptides: Vec<String> = chosen_effects.iter().map(|idx| peptides[*idx].to_owned()).collect();
     let effects: Vec<Vec<usize>> = chosen_effects.iter().map(|idx| effects[*idx].to_owned()).collect();
 
-    // Parse scores from JSON string to hashmap, only keep the randomly selected samples.
-    let peptide_scores_map: HashMap<String, f32> = serde_json::from_str(&pep_scores)?;
+    // Only keep the randomly selected samples.
     let mut peptide_scores: Vec<f32> = vec![0.0; peptides.len()];
     for i in 0..peptides.len() {
         peptide_scores[i] = peptide_scores_map[&peptides[i]];
     }
 
-    // parse counts from JSON string to hashmap, only keep the randomly selected samples.
-    let peptide_counts_map: HashMap<String, usize> = serde_json::from_str(&pep_psm_counts)?;
     let mut peptide_counts: Vec<usize> = vec![0; peptides.len()];
     for i in 0..peptides.len() {
         peptide_counts[i] = peptide_counts_map[&peptides[i]];
