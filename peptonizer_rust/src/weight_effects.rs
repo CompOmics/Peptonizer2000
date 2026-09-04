@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use crate::utils::log;
 use crate::random::select_random_samples_with_weights;
 use csv::Writer;
-use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
+use crate::unipept_communicator::get_unique_lineage_at_specified_rank_async;
 
 /// Represents the main pipeline for weighting effects based on peptide evidence.
 ///
@@ -19,7 +19,7 @@ use crate::unipept_communicator::get_unique_lineage_at_specified_rank;
 /// Tuple `(sequence_csv, effects_weights_csv)`:
 /// * `sequence_csv` - CSV string of peptide peptides and their weights.
 /// * `effects_weights_csv` - CSV string of effects weights and uniqueness.
-pub fn perform_effects_weighing(
+pub async fn perform_effects_weighing(
     pep_effects: String,
     pep_scores: String,
     pep_psm_counts: String,
@@ -32,10 +32,10 @@ pub fn perform_effects_weighing(
     let peptides: Vec<String> = peptide_effects.keys().map(|seq| seq.to_owned()).collect();
 
     let mut effects: Vec<Vec<usize>> = peptide_effects.into_values().collect();
-    
+
     if let Some(ref rank) = effects_rank {
         log("Started mapping all effect ids to the specified rank...");
-        normalize_unipept_responses(&mut effects, rank)?;
+        normalize_unipept_responses(&mut effects, rank).await?;
     } else {
         log("Skipping rank normalization because no rank was provided...");
     }
@@ -199,14 +199,16 @@ fn generate_effects_weights_csv(effect: Vec<usize>, higher_taxid_weights: Vec<f3
 ///
 /// * `effects` - Mutable reference to a vector of vectors of effect IDs.
 /// * `effects_rank` - The desired effect rank to normalize to (e.g., "species").
-fn normalize_unipept_responses(effects: &mut [Vec<usize>], effects_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
-    
+pub(crate) async fn normalize_unipept_responses(effects: &mut [Vec<usize>], effects_rank: &str) -> Result<(), Box<dyn std::error::Error>> {
+
     // TODO: should we first do get_lineages_for_effects to limit Unipept calls (see python)?
     let mut lineage_cache: HashMap<usize, Vec<Option<usize>>> = HashMap::new();
 
     // Map all effects onto the rank specified by the user
     for effect in effects {
-        *effect = get_unique_lineage_at_specified_rank(effect, effects_rank, &mut lineage_cache)?;
+        *effect = get_unique_lineage_at_specified_rank_async(effect, effects_rank, &mut lineage_cache)
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
     }
 
     Ok(())
@@ -241,13 +243,13 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_perform_effects_weighing_basic() {
+    #[tokio::test]
+    async fn test_perform_effects_weighing_basic() {
         let pep_effects_json = r#"{"PEP1":[3000],"PEP2":[3500]}"#.to_string();
         let pep_scores_json = r#"{"PEP1":0.8,"PEP2":0.5}"#.to_string();
         let pep_psm_counts_json = r#"{"PEP1":4,"PEP2":2}"#.to_string();
         let max_effects = 10;
-        let effects_rank = "species".to_string();
+        let effects_rank = Some("species".to_string());
 
         let csvs = perform_effects_weighing(
             pep_effects_json,
@@ -255,7 +257,8 @@ mod tests {
             pep_psm_counts_json,
             max_effects,
             effects_rank
-        );
+        )
+        .await;
         assert!(csvs.is_ok());
         let (seq_csv, effects_csv) = csvs.unwrap();
 
@@ -273,7 +276,7 @@ mod tests {
         let weights = vec![0.5, 0.2];
         let log_weights = vec![0.18, 0.079];
 
-        let csv = generate_sequence_csv(None, false, peptides, scores, psms, effect, weights, log_weights);
+        let csv = generate_peptides_csv(None, false, peptides, scores, psms, effect, weights, log_weights);
         assert!(csv.is_ok());
         let csv = csv.unwrap();
         assert!(csv.contains("sequence"));
@@ -291,7 +294,7 @@ mod tests {
         let log_weights = vec![0.042];
         let filter_effects: HashSet<usize> = vec![11,12].into_iter().collect();
 
-        let csv = generate_sequence_csv(Some(filter_effects), true, peptides, scores, psms, effect, weights, log_weights);
+        let csv = generate_peptides_csv(Some(filter_effects), true, peptides, scores, psms, effect, weights, log_weights);
         assert!(csv.is_ok());
         let csv = csv.unwrap();
         assert!(csv.contains("12"));
@@ -312,10 +315,10 @@ mod tests {
         assert!(csv.contains("true"));
     }
 
-    #[test]
-    fn test_normalize_unipept_responses_basic() {
+    #[tokio::test]
+    async fn test_normalize_unipept_responses_basic() {
         let mut effects = vec![vec![3000]];
-        let _ = normalize_unipept_responses(&mut effects, "species");
+        let _ = normalize_unipept_responses(&mut effects, "species").await;
         assert!(effects.iter().all(|v| !v.is_empty()));
     }
 

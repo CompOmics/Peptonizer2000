@@ -3,6 +3,20 @@ import argparse
 from peptonizer_rust import execute_pepgm_py
 
 
+def str_to_bool(value: str) -> bool:
+    """
+    Convert a command-line string to a bool. Needed because argparse's built-in
+    `type=bool` calls `bool(str)`, which is True for any non-empty string
+    (so "--regularized False" would incorrectly parse as True).
+    """
+    value = value.strip().lower()
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
+
 parser = argparse.ArgumentParser(
     description="Run the PepGM algorithm from command line"
 )
@@ -47,7 +61,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--regularized",
-    type=bool,
+    type=str_to_bool,
     default=False,
     help="If True, the regularized version of the noisy-OR model is used.",
 )
