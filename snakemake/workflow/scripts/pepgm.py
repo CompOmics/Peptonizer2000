@@ -1,6 +1,20 @@
 import argparse
 
-from peptonizer.peptonizer import run_belief_propagation
+from peptonizer_rust import execute_pepgm_py
+
+
+def str_to_bool(value: str) -> bool:
+    """
+    Convert a command-line string to a bool. Needed because argparse's built-in
+    `type=bool` calls `bool(str)`, which is True for any non-empty string
+    (so "--regularized False" would incorrectly parse as True).
+    """
+    value = value.strip().lower()
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
 
 
 parser = argparse.ArgumentParser(
@@ -8,10 +22,10 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    "--communities-graphml-path",
+    "--communities-graph-bytes-path",
     type=str,
     required=True,
-    help="Path to where the GraphML file of the factor graph (using Louvain communities) is stored.",
+    help="Path to where the binary file of the factor graph (using Louvain communities) is stored.",
 )
 parser.add_argument(
     "--max-iter",
@@ -47,15 +61,15 @@ parser.add_argument(
 )
 parser.add_argument(
     "--regularized",
-    type=bool,
+    type=str_to_bool,
     default=False,
     help="If True, the regularized version of the noisy-OR model is used.",
 )
 
 args = parser.parse_args()
 
-with open(args.communities_graphml_path, 'r') as in_file:
-    csv_content = run_belief_propagation(
+with open(args.communities_graph_bytes_path, 'rb') as in_file:
+    json_content = execute_pepgm_py(
         in_file.read(),
         args.alpha,
         args.beta,
@@ -66,4 +80,4 @@ with open(args.communities_graphml_path, 'r') as in_file:
     )
 
     with open(args.out, 'w') as out_file:
-        out_file.write(csv_content)
+        out_file.write(json_content)

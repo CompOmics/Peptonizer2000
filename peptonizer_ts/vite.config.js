@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import path from "path";
 import dts from 'vite-plugin-dts';
+import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
     assetsInclude: ['**/*.py', '**/*.whl'],
@@ -14,15 +15,6 @@ export default defineConfig({
             formats: ['es'], // Switch to ESM format,
             filename: "peptonizer.js"
         },
-        rollupOptions: {
-            // Externalize dependencies you don't want to bundle
-            external: ['pyodide'], // Example, add others like 'react' if neededp
-            output: {
-                globals: {
-                    pyodide: 'Pyodide', // Define the global name for external libraries
-                }
-            }
-        },
     },
     plugins: [
         // Use `vite-plugin-dts` for type bundling
@@ -31,6 +23,6 @@ export default defineConfig({
             insertTypesEntry: true, // Automatically add the "types" field in `package.json`
             rollupTypes: true, // Enable bundling all `.d.ts` files into a single file
         }),
+        wasm(),
     ],
-    optimizeDeps: { exclude: ["pyodide"] }
 });

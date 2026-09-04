@@ -1,5 +1,6 @@
 // Define a specific type of inputs that are expected for each task that can be performed by this worker.
 enum WorkerTask {
+    FETCH_UNIPEPT_TAXON,
     PERFORM_TAXA_WEIGHING,
     GENERATE_GRAPH,
     EXECUTE_PEPGM,
@@ -7,27 +8,32 @@ enum WorkerTask {
     COMPUTE_GOODNESS
 }
 
+interface FetchUnipeptTaxonTaskData {
+    peptidesScores: Map<string, number>;
+    rank: string;
+    taxonQuery: number[];
+}
+
 interface PerformTaxaWeighingTaskData {
     peptidesTaxa: Map<string, number[]>;
     peptidesScores: Map<string, number>;
     peptidesCounts: Map<string, number>;
-    rank: string;
     taxaInGraph: number;
 }
 
 interface GenerateGraphTaskData {
-    taxaWeightsCsv: string;
+    sequenceScoresCsv: string;
 }
 
 interface ExecutePepgmTaskData {
-    graphXml: string,
+    factor_graph_bytes: Uint8Array,
     alpha: number,
     beta: number,
     prior: number,
 }
 
 interface ClusterTaxaTaskData {
-    graphXml: string,
+    sequenceScoresCsv: string,
     taxaWeightsCsv: string,
     similarityThreshold: number
 }
@@ -38,6 +44,7 @@ interface ComputeGoodnessTaskData {
 }
 
 type SpecificInputEventData =
+    { task: WorkerTask.FETCH_UNIPEPT_TAXON, input: FetchUnipeptTaxonTaskData} |
     { task: WorkerTask.PERFORM_TAXA_WEIGHING, input: PerformTaxaWeighingTaskData } |
     { task: WorkerTask.GENERATE_GRAPH, input: GenerateGraphTaskData } |
     { task: WorkerTask.EXECUTE_PEPGM, input: ExecutePepgmTaskData } |
@@ -48,13 +55,17 @@ type CommonInputEventData = { workerId: number };
 
 type InputEventData = SpecificInputEventData & CommonInputEventData;
 
+interface FetchUnipeptTaxonTaskResult {
+    unipeptJson: string,
+}
+
 interface PerformTaxaWeighingTaskResult {
     sequenceScoresCsv: string,
     taxaWeightsCsv: string
 }
 
 interface GenerateGraphTaskDataResult {
-    graphXml: string
+    factor_graph_bytes: Uint8Array
 }
 
 interface ExecutePepgmTaskDataResult {
@@ -83,6 +94,7 @@ enum ResultType {
 }
 
 type SpecificOutputEventData = { resultType: ResultType.SUCCESSFUL } & (
+    { task: WorkerTask.FETCH_UNIPEPT_TAXON, output: FetchUnipeptTaxonTaskResult } |
     { task: WorkerTask.PERFORM_TAXA_WEIGHING, output: PerformTaxaWeighingTaskResult } |
     { task: WorkerTask.GENERATE_GRAPH, output: GenerateGraphTaskDataResult } |
     { task: WorkerTask.EXECUTE_PEPGM, output: ExecutePepgmTaskDataResult } |
@@ -102,6 +114,7 @@ export {
 };
 
 export type {
+    FetchUnipeptTaxonTaskData, 
     PerformTaxaWeighingTaskData,
     GenerateGraphTaskData,
     ExecutePepgmTaskData,
@@ -109,6 +122,7 @@ export type {
     ComputeGoodnessTaskData,
     SpecificInputEventData,
     InputEventData,
+    FetchUnipeptTaxonTaskResult,
     PerformTaxaWeighingTaskResult,
     GenerateGraphTaskDataResult,
     ExecutePepgmTaskDataResult,

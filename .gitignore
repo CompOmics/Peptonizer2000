@@ -83,7 +83,6 @@ __pycache__/
 env/
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -96,3 +95,10 @@ wheels/
 .installed.cfg
 *.egg
 *.tar.gz
+
+# Rust
+peptonizer_rust/target/
+peptonizer_rust/Cargo.lock
+peptonizer_rust/node_modules/
+peptonizer_rust/pkg/
+peptonizer_rust/yarn.lock

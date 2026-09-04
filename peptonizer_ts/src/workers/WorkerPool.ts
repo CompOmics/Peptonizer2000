@@ -3,6 +3,7 @@ import {
     ClusterTaxaTaskData,
     ComputeGoodnessTaskData,
     ExecutePepgmTaskData,
+    FetchUnipeptTaxonTaskData,
     GenerateGraphTaskData,
     InputEventData,
     OutputEventData,
@@ -81,6 +82,16 @@ class WorkerPool {
         }, workerCount);
     }
 
+    public async fetchUnipeptTaxonInfo(peptidesScores: Map<string, number>, rank: string, taxonQuery: number[]): Promise<string> {
+        const eventData: FetchUnipeptTaxonTaskData = {
+            peptidesScores,
+            rank,
+            taxonQuery
+        };
+
+        return await this.queue.pushAsync({ queueInput: { task: WorkerTask.FETCH_UNIPEPT_TAXON, input: eventData }, progressListener: undefined });
+    }
+
     /**
      * Generates a CSV-file representing a dataframe with all the taxa weights required for the Peptonizer. These
      * taxa weights will be used in a subsequent step of the Peptonizer to generate the factor graph.
@@ -90,7 +101,6 @@ class WorkerPool {
      * @param peptidesScores Mapping between peptide sequences that need to be considered by the peptonizer and a
      * scoring value assigned to each sequence by prior steps (e.g. search engines).
      * @param peptidesCounts Mapping between peptide sequences and their occurrences in the input file.
-     * @param rank At which NCBI taxonomic rank should the Peptonizer perform the taxonomic inference?
      * @param taxaInGraph How many taxa are being used in the graphical model?
      * @return A CSV-representation of a dataframe with taxon weights.
      */
@@ -98,7 +108,6 @@ class WorkerPool {
         peptidesTaxa: Map<string, number[]>,
         peptidesScores: Map<string, number>,
         peptidesCounts: Map<string, number>,
-        rank: string,
         taxaInGraph: number,
     ): Promise<[string, string]> {
         if (this.isCancelled) {
@@ -109,7 +118,6 @@ class WorkerPool {
             peptidesTaxa,
             peptidesScores,
             peptidesCounts,
-            rank,
             taxaInGraph
         };
 
@@ -117,21 +125,21 @@ class WorkerPool {
     }
 
     public async generateGraph(
-        taxaWeightsCsv: string
-    ): Promise<string> {
+        sequenceScoresCsv: string
+    ): Promise<Uint8Array> {
         if (this.isCancelled) {
             throw new Error("Workerpool is no longer active. Cancel has been called on this pool before.");
         }
 
         const eventData: GenerateGraphTaskData = {
-            taxaWeightsCsv
+            sequenceScoresCsv
         };
 
         return await this.queue.pushAsync({ queueInput: { task: WorkerTask.GENERATE_GRAPH, input: eventData }, progressListener: undefined });
     }
 
     public async executePepgm(
-        graphXml: string,
+        factor_graph_bytes: Uint8Array,
         alpha: number,
         beta: number,
         prior: number,
@@ -142,7 +150,7 @@ class WorkerPool {
         }
 
         const eventData: ExecutePepgmTaskData = {
-            graphXml,
+            factor_graph_bytes,
             alpha,
             beta,
             prior
@@ -152,7 +160,7 @@ class WorkerPool {
     }
 
     public async clusterTaxa(
-        graphXml: string,
+        sequenceScoresCsv: string,
         taxaWeightsCsv: string,
         similarityThreshold: number = 0.9
     ): Promise<string> {
@@ -161,7 +169,7 @@ class WorkerPool {
         }
 
         const eventData: ClusterTaxaTaskData = {
-            graphXml,
+            sequenceScoresCsv,
             taxaWeightsCsv,
             similarityThreshold
         }
@@ -214,10 +222,12 @@ class WorkerPool {
             const eventData = event.data;
 
             if (eventData.resultType === ResultType.SUCCESSFUL) {
-                if (eventData.task === WorkerTask.PERFORM_TAXA_WEIGHING) {
+                if (eventData.task === WorkerTask.FETCH_UNIPEPT_TAXON) {
+                    resolve(eventData.output.unipeptJson)
+                } else if (eventData.task === WorkerTask.PERFORM_TAXA_WEIGHING) {
                     resolve([eventData.output.sequenceScoresCsv, eventData.output.taxaWeightsCsv]);
                 } else if (eventData.task === WorkerTask.GENERATE_GRAPH) {
-                    resolve(eventData.output.graphXml);
+                    resolve(eventData.output.factor_graph_bytes);
                 } else if (eventData.task === WorkerTask.EXECUTE_PEPGM) {
                     const peptonizerResult: PeptonizerResult = new Map();
                     for (const [key, value] of Object.entries(JSON.parse(eventData.output.taxonScoresJson))) {

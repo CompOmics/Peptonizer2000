@@ -5,7 +5,7 @@ input_file: '../resources/test_files/S03.tsv'
 
 # In which directory should all output (and intermediate) files be stored. This directory is relative to the location of
 # the Snakefile.
-data_dir: '../data'
+data_dir: '../data/'
 
 # In which directory should all logs for each of the different Snakemake rules be stored?
 log_dir: '../logs'
