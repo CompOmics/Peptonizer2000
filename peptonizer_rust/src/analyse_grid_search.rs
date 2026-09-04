@@ -143,14 +143,12 @@ mod tests {
                 effect: 1,
                 scaled_weight: 0.5,
                 unique: true,
-                cluster_members: vec![1, 2],
             },
             Effect {
                 id: 1,
                 effect: 2,
                 scaled_weight: 0.8,
                 unique: false,
-                cluster_members: vec![2, 3],
             },
         ];
         let csv = generate_effects_cluster_csv(effects).unwrap();

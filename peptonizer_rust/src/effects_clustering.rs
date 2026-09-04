@@ -2,8 +2,6 @@ use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 use csv::{ReaderBuilder, WriterBuilder};
 use crate::factor_graph::{parse_effect_weights_csv, EffectWeight};
-use crate::utils::log;
-
 
 
 /// Represents a effect unit with attributes used for clustering.
@@ -219,7 +217,7 @@ id,effect,scaled_weight,unique
         assert_eq!(effects[1].effect, 20);
 
         let out_csv = generate_effects_cluster_csv(effects).unwrap();
-        assert!(out_csv.contains("id,effect,scaled_weight,unique,cluster_members"));
+        assert!(out_csv.contains("id,effect,scaled_weight,unique"));
         assert!(out_csv.contains("10"));
     }
 
@@ -242,15 +240,15 @@ id,effect,scaled_weight,unique
     #[test]
     fn test_generate_effects_cluster_csv_roundtrip() {
         let effects = vec![
-            Effect { id: 1, effect: 10, scaled_weight: 0.5, unique: true, cluster_members: vec![10, 11] },
-            Effect { id: 2, effect: 20, scaled_weight: 0.8, unique: false, cluster_members: vec![20] },
+            Effect { id: 1, effect: 10, scaled_weight: 0.5, unique: true },
+            Effect { id: 2, effect: 20, scaled_weight: 0.8, unique: false },
         ];
 
         let csv_string = generate_effects_cluster_csv(effects.clone()).unwrap();
         let parsed = parse_effect_csv(csv_string).unwrap();
 
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].cluster_members, vec![10, 11]);
-        assert_eq!(parsed[1].cluster_members, vec![20]);
+        assert_eq!(parsed[0].effect, 10);
+        assert_eq!(parsed[1].effect, 20);
     }
 }
