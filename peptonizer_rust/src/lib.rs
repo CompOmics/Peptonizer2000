@@ -4,13 +4,13 @@ extern crate serde;
 mod utils;
 mod http_client;
 mod random;
-mod weight_effects;
-mod zero_lookahead_belief_propagation;
-mod factor_graph;
+pub mod weight_effects;
+pub mod zero_lookahead_belief_propagation;
+pub mod factor_graph;
 mod fetch_unipept_taxa;
 mod unipept_communicator;
-mod effects_clustering;
-mod analyse_grid_search;
+pub mod effects_clustering;
+pub mod analyse_grid_search;
 #[cfg(not(target_arch = "wasm32"))]
 mod input_parser;
 #[cfg(not(target_arch = "wasm32"))]
