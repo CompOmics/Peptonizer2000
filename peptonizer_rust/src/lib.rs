@@ -56,7 +56,7 @@ mod wasm {
         rank: String,
         taxon_query: String,
     ) -> Result<String, JsValue> {
-        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query, true)
+        fetch_peptides_and_filter_taxa(peptides, rank, taxon_query)
             .await
             .map_err(|e| JsValue::from_str(&format!("fetch_unipept_taxa_wasm failed: {e}")))
     }
@@ -280,7 +280,6 @@ mod pyo3 {
             peptides,
             rank,
             taxon_query,
-            false,
         ))
         .unwrap()
     }
